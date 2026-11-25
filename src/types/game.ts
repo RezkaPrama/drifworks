@@ -199,6 +199,9 @@ export interface TelemetryState {
   driftDirection: 'LEFT' | 'RIGHT' | 'STRAIGHT' | 'TRANSITION' | 'SPINOUT';
   isDrifting: boolean;
   rearTraction: number; // 0 (lost traction / sliding) to 1 (full grip)
+  steerLevel: number; // -5 (kanan penuh) .. 0 (lurus) .. +5 (kiri penuh)
+  throttleLevel: number; // 0..5
+  brakeLevel: number; // 0..5
   driftPhase: 'GRIP' | 'INITIATE' | 'SLIDE' | 'BALANCE';
   bankedScore: number;
   liveDriftScore: number;

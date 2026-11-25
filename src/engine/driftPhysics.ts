@@ -41,6 +41,15 @@ export class DriftPhysicsCar {
   public nitro = 1.0;
   public isBoosting = false;
 
+  // Level-based controls: steer -5 (kanan penuh) .. 0 (lurus) .. +5 (kiri penuh), throttle/brake 0..5
+  public steerLevel = 0;
+  public throttleLevel = 0;
+  public brakeLevel = 0;
+  public levelSteerValue = 0; // smoothed -1..1 value fed into the physics
+  private steerLevelTimer = 0;
+  private throttleLevelTimer = 0;
+  private brakeLevelTimer = 0;
+
   // Vehicle condition
   public bodyIntegrity = 100;
   public tireHealth = 100;
@@ -103,6 +112,13 @@ export class DriftPhysicsCar {
     this.nitro = 1.0;
     this.smoothedSteer = 0;
     this.prevSteer = 0;
+    this.steerLevel = 0;
+    this.throttleLevel = 0;
+    this.brakeLevel = 0;
+    this.levelSteerValue = 0;
+    this.steerLevelTimer = 0;
+    this.throttleLevelTimer = 0;
+    this.brakeLevelTimer = 0;
     this.prevHandbrake = false;
     this.prevClutchKick = false;
     this.wasInSlide = false;
@@ -187,9 +203,30 @@ export class DriftPhysicsCar {
     }
   }
 
+  // Menggeser level satu langkah menuju target setiap interval tertentu.
+  // intervalUp: waktu per langkah saat |level| bertambah, intervalDown: saat |level| berkurang (menuju 0).
+  private advanceLevel(
+    level: number,
+    target: number,
+    timer: number,
+    dt: number,
+    intervalUp: number,
+    intervalDown: number,
+  ): { level: number; timer: number } {
+    if (level === target) return { level, timer: 0 };
+    const dir = Math.sign(target - level);
+    const growing = Math.abs(level + dir) > Math.abs(level);
+    const interval = growing ? intervalUp : intervalDown;
+    const nextTimer = timer + dt;
+    if (nextTimer >= interval) {
+      return { level: level + dir, timer: nextTimer - interval };
+    }
+    return { level, timer: nextTimer };
+  }
+
   public step(
     dt: number,
-    input: InputState,
+    rawInput: InputState,
     stats: CalculatedCarStats,
     build: CarBuildConfig,
     trackWorld: TrackWorld,
@@ -199,6 +236,32 @@ export class DriftPhysicsCar {
     onPenaltyHit?: () => void,
   ) {
     const clampedDt = Math.min(dt, 0.05);
+
+    // --- LEVEL-BASED CONTROLS (steer -5..+5, throttle 0..5, brake 0..5) ---
+    // Steer: tiap tekan menggeser 1 level. Saat drift kanan di level -5, tekan kiri
+    // hanya menurunkan ke -4, -3, ... sampai 0 (lurus), baru lanjut ke sisi kiri.
+    const steerTarget = Math.round(THREE.MathUtils.clamp(rawInput.steer, -1, 1) * 5);
+    const steerAdv = this.advanceLevel(this.steerLevel, steerTarget, this.steerLevelTimer, clampedDt, 0.11, 0.1);
+    this.steerLevel = steerAdv.level;
+    this.steerLevelTimer = steerAdv.timer;
+
+    const throttleTarget = rawInput.throttle > 0.04 ? Math.ceil(Math.min(1, rawInput.throttle) * 5) : 0;
+    const throttleAdv = this.advanceLevel(this.throttleLevel, throttleTarget, this.throttleLevelTimer, clampedDt, 0.1, 0.07);
+    this.throttleLevel = throttleAdv.level;
+    this.throttleLevelTimer = throttleAdv.timer;
+
+    const brakeTarget = rawInput.brake > 0.04 ? Math.ceil(Math.min(1, rawInput.brake) * 5) : 0;
+    const brakeAdv = this.advanceLevel(this.brakeLevel, brakeTarget, this.brakeLevelTimer, clampedDt, 0.09, 0.06);
+    this.brakeLevel = brakeAdv.level;
+    this.brakeLevelTimer = brakeAdv.timer;
+
+    this.levelSteerValue = this.steerLevel / 5;
+    const input: InputState = {
+      ...rawInput,
+      steer: this.levelSteerValue,
+      throttle: this.throttleLevel / 5,
+      brake: this.brakeLevel / 5,
+    };
 
     // Local forward & right/left basis vectors (heading=0 faces +Z)
     const sinH = Math.sin(this.heading);

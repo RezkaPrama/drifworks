@@ -531,7 +531,12 @@ export function calculateCarStats(
   else if (driftReadiness >= 45) driftSpecLabel = 'Street Drift';
 
   const powerFactor = Math.min(2.4, (horsepower / weightKg) * 3.8 * build.gearRatio);
-  const lateralGrip = ([1.18, 0.96, 0.85][build.tireTier] ?? 1.18) - build.camber * 0.01;
+  // Mesin lebih kuat = grip belakang lebih kecil (lebih mudah meluncur): tier 0..3 mengurangi 0 / 0.07 / 0.14 / 0.21
+  const engineGripLoss = build.engineTier * 0.07;
+  const lateralGrip = Math.max(
+    0.6,
+    ([1.18, 0.96, 0.85][build.tireTier] ?? 1.18) - build.camber * 0.01 - engineGripLoss,
+  );
   const driftSlipFactor =
     ([0.38, 0.76, 1.04][build.diffTier] ?? 0.38) *
     ([0.62, 0.88, 1.08][build.tireTier] ?? 0.62);

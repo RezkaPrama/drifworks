@@ -541,6 +541,46 @@ export const RaceHud: React.FC<RaceHudProps> = ({
                 </span>
               </div>
             </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="text-slate-400">Steer</span>
+                <span className="font-mono-tabular font-bold text-white">
+                  {telemetry.steerLevel === 0
+                    ? 'LURUS 0'
+                    : `${telemetry.steerLevel > 0 ? 'KIRI' : 'KANAN'} ${Math.abs(telemetry.steerLevel)}`}
+                </span>
+              </div>
+              <div className="flex items-center justify-end gap-0.5">
+                {[-5, -4, -3, -2, -1, 1, 2, 3, 4, 5].map((lv) => {
+                  const active =
+                    telemetry.steerLevel !== 0 &&
+                    Math.sign(lv) === Math.sign(telemetry.steerLevel) &&
+                    Math.abs(lv) <= Math.abs(telemetry.steerLevel);
+                  return (
+                    <span
+                      key={lv}
+                      className={`w-1.5 h-2.5 rounded-sm ${active ? 'bg-amber-400' : 'bg-slate-800'} ${lv === -1 ? 'mr-1' : ''}`}
+                    />
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="text-emerald-400">Gas</span>
+                <span className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5].map((lv) => (
+                    <span key={lv} className={`w-3 h-1.5 rounded-sm ${lv <= telemetry.throttleLevel ? 'bg-emerald-400' : 'bg-slate-800'}`} />
+                  ))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2 text-[10px]">
+                <span className="text-rose-400">Rem</span>
+                <span className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5].map((lv) => (
+                    <span key={lv} className={`w-3 h-1.5 rounded-sm ${lv <= telemetry.brakeLevel ? 'bg-rose-500' : 'bg-slate-800'}`} />
+                  ))}
+                </span>
+              </div>
+            </div>
             <div>
               <div className="text-[10px] text-slate-400 mb-0.5">Nitro Boost</div>
               <div className="w-24 h-1.5 bg-slate-800 rounded-sm overflow-hidden">
