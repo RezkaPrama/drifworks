@@ -1,0 +1,229 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidHex(val) {
+      return val is string && val.size() == 7 && val.matches('^#[0-9a-fA-F]{6}$');
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'driftCoins', 'apexCredits',
+          'reputation', 'activeCarId', 'ownedCars', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'driftCoins', 'apexCredits',
+          'reputation', 'activeCarId', 'ownedCars', 'createdAt', 'updatedAt'
+        ])
+        && data.uid is string && data.uid == userId && data.uid == request.auth.uid
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 50
+        && data.driftCoins is number && data.driftCoins >= 0 && data.driftCoins <= 99999999
+        && data.apexCredits is number && data.apexCredits >= 0 && data.apexCredits <= 99999999
+        && data.reputation is number && data.reputation >= 0 && data.reputation <= 99999999
+        && isValidId(data.activeCarId) && data.activeCarId.size() <= 32
+        && data.ownedCars is list && data.ownedCars.size() >= 1 && data.ownedCars.size() <= 30
+        && data.ownedCars[0] is string && data.ownedCars[0].size() <= 32
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCarBuild(data, userId, carId) {
+      return data.keys().hasAll([
+          'ownerId', 'carId', 'engineTier', 'turboTier', 'diffTier',
+          'tireTier', 'suspensionTier', 'brakeTier', 'unlockedParts',
+          'paintHex', 'paintFinish', 'rimColorHex', 'rimStyle',
+          'bodykit', 'spoiler', 'smokeColorHex', 'underglowHex',
+          'rideHeight', 'camber', 'gearRatio', 'brakeBias', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'carId', 'engineTier', 'turboTier', 'diffTier',
+          'tireTier', 'suspensionTier', 'brakeTier', 'unlockedParts',
+          'paintHex', 'paintFinish', 'rimColorHex', 'rimStyle',
+          'bodykit', 'spoiler', 'smokeColorHex', 'underglowHex',
+          'rideHeight', 'camber', 'gearRatio', 'brakeBias', 'updatedAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId && data.ownerId == request.auth.uid
+        && data.carId is string && data.carId == carId && isValidId(data.carId) && data.carId.size() <= 32
+        && data.engineTier is number && data.engineTier >= 0 && data.engineTier <= 3
+        && data.turboTier is number && data.turboTier >= 0 && data.turboTier <= 2
+        && data.diffTier is number && data.diffTier >= 0 && data.diffTier <= 2
+        && data.tireTier is number && data.tireTier >= 0 && data.tireTier <= 2
+        && data.suspensionTier is number && data.suspensionTier >= 0 && data.suspensionTier <= 2
+        && data.brakeTier is number && data.brakeTier >= 0 && data.brakeTier <= 2
+        && data.unlockedParts is list && data.unlockedParts.size() >= 1 && data.unlockedParts.size() <= 60
+        && data.unlockedParts[0] is string && data.unlockedParts[0].size() <= 40
+        && isValidHex(data.paintHex)
+        && data.paintFinish in ['gloss', 'metallic', 'matte']
+        && isValidHex(data.rimColorHex)
+        && data.rimStyle in ['steel', 'spoke5', 'mesh', 'turbofan']
+        && data.bodykit in ['stock', 'street', 'widebody']
+        && data.spoiler in ['none', 'ducktail', 'gtwing', 'chassis']
+        && isValidHex(data.smokeColorHex)
+        && (data.underglowHex == 'none' || isValidHex(data.underglowHex))
+        && data.rideHeight is number && data.rideHeight >= -1 && data.rideHeight <= 1
+        && data.camber is number && data.camber >= 0 && data.camber <= 8
+        && data.gearRatio is number && data.gearRatio >= 0.8 && data.gearRatio <= 1.25
+        && data.brakeBias is number && data.brakeBias >= 0.3 && data.brakeBias <= 0.8
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStorePurchase(data, userId) {
+      return data.keys().hasAll([
+          'ownerId', 'packageId', 'packageName', 'amountIdr',
+          'creditsGranted', 'unlockedCarId', 'paymentMethod', 'status', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'packageId', 'packageName', 'amountIdr',
+          'creditsGranted', 'unlockedCarId', 'paymentMethod', 'status', 'createdAt'
+        ])
+        && data.ownerId is string && data.ownerId == userId && data.ownerId == request.auth.uid
+        && isValidId(data.packageId) && data.packageId.size() <= 64
+        && data.packageName is string && data.packageName.size() >= 1 && data.packageName.size() <= 80
+        && data.amountIdr is number && data.amountIdr > 0 && data.amountIdr <= 50000000
+        && data.creditsGranted is number && data.creditsGranted >= 0 && data.creditsGranted <= 1000000
+        && data.unlockedCarId is string && data.unlockedCarId.size() <= 32
+        && data.paymentMethod in ['qris', 'ewallet', 'va', 'card']
+        && data.status == 'completed'
+        && data.createdAt is timestamp;
+    }
+
+    function isValidLeaderboardEntry(data, trackId, userId) {
+      return data.keys().hasAll([
+          'userId', 'trackId', 'driverName', 'carName', 'carSpec',
+          'score', 'maxCombo', 'horsepower', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'trackId', 'driverName', 'carName', 'carSpec',
+          'score', 'maxCombo', 'horsepower', 'updatedAt'
+        ])
+        && data.userId is string && data.userId == userId && data.userId == request.auth.uid
+        && data.trackId is string && data.trackId == trackId && isValidId(data.trackId) && data.trackId.size() <= 32
+        && data.driverName is string && data.driverName.size() >= 1 && data.driverName.size() <= 50
+        && data.carName is string && data.carName.size() >= 1 && data.carName.size() <= 50
+        && data.carSpec is string && data.carSpec.size() >= 1 && data.carSpec.size() <= 60
+        && data.score is number && data.score >= 0 && data.score <= 99999999
+        && data.maxCombo is number && data.maxCombo >= 1 && data.maxCombo <= 100
+        && data.horsepower is number && data.horsepower >= 50 && data.horsepower <= 2000
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isVerified()
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isVerified()
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName', 'driftCoins', 'apexCredits', 'reputation', 'activeCarId', 'ownedCars', 'updatedAt'
+          ])
+        );
+      allow delete: if false;
+
+      match /builds/{carId} {
+        allow get: if isValidId(userId) && isValidId(carId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(carId)
+          && isOwner(userId)
+          && isVerified()
+          && isValidCarBuild(incoming(), userId, carId)
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow update: if isValidId(userId)
+          && isValidId(carId)
+          && isOwner(userId)
+          && isVerified()
+          && isValidCarBuild(incoming(), userId, carId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().carId == existing().carId
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'engineTier', 'turboTier', 'diffTier', 'tireTier', 'suspensionTier', 'brakeTier',
+            'unlockedParts', 'paintHex', 'paintFinish', 'rimColorHex', 'rimStyle',
+            'bodykit', 'spoiler', 'smokeColorHex', 'underglowHex',
+            'rideHeight', 'camber', 'gearRatio', 'brakeBias', 'updatedAt'
+          ])
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow delete: if false;
+      }
+
+      match /purchases/{purchaseId} {
+        allow get: if isValidId(userId) && isValidId(purchaseId) && isOwner(userId);
+        allow list: if isValidId(userId) && isOwner(userId) && existing().ownerId == request.auth.uid;
+        allow create: if isValidId(userId)
+          && isValidId(purchaseId)
+          && isOwner(userId)
+          && isVerified()
+          && isValidStorePurchase(incoming(), userId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+        allow update, delete: if false;
+      }
+    }
+
+    match /tracks/{trackId}/leaderboard/{userId} {
+      allow get: if isValidId(trackId) && isValidId(userId);
+      allow list: if isValidId(trackId) && existing().score >= 0;
+      allow create: if isValidId(trackId)
+        && isValidId(userId)
+        && isOwner(userId)
+        && isVerified()
+        && isValidLeaderboardEntry(incoming(), trackId, userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(trackId)
+        && isValidId(userId)
+        && isOwner(userId)
+        && isVerified()
+        && isValidLeaderboardEntry(incoming(), trackId, userId)
+        && incoming().userId == existing().userId
+        && incoming().trackId == existing().trackId
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'driverName', 'carName', 'carSpec', 'score', 'maxCombo', 'horsepower', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+  }
+}

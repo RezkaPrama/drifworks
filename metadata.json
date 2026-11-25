@@ -1,0 +1,6 @@
+{
+  "name": "Apex DriftWorks",
+  "description": "3D Pixar-style drift car builder, physics-driven drift racing workshop, career reputation tracks, developer pro shop, and global online leaderboard with keyboard and gamepad support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

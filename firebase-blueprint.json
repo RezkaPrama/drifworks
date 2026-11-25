@@ -1,0 +1,282 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Player garage profile, economy balances, career reputation, and owned car list.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "driftCoins": {
+          "type": "number"
+        },
+        "apexCredits": {
+          "type": "number"
+        },
+        "reputation": {
+          "type": "number"
+        },
+        "activeCarId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownedCars": {
+          "type": "array",
+          "description": "List of owned car IDs (max 30)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "driftCoins",
+        "apexCredits",
+        "reputation",
+        "activeCarId",
+        "ownedCars",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CarBuild": {
+      "title": "CarBuild",
+      "description": "Per-car mechanical, tuning, and visual workshop configuration owned by a user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "carId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "engineTier": { "type": "number" },
+        "turboTier": { "type": "number" },
+        "diffTier": { "type": "number" },
+        "tireTier": { "type": "number" },
+        "suspensionTier": { "type": "number" },
+        "brakeTier": { "type": "number" },
+        "unlockedParts": { "type": "array" },
+        "paintHex": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "maxLength": 7
+        },
+        "paintFinish": {
+          "type": "string",
+          "enum": ["gloss", "metallic", "matte"],
+          "maxLength": 16
+        },
+        "rimColorHex": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "maxLength": 7
+        },
+        "rimStyle": {
+          "type": "string",
+          "enum": ["steel", "spoke5", "mesh", "turbofan"],
+          "maxLength": 16
+        },
+        "bodykit": {
+          "type": "string",
+          "enum": ["stock", "street", "widebody"],
+          "maxLength": 16
+        },
+        "spoiler": {
+          "type": "string",
+          "enum": ["none", "ducktail", "gtwing", "chassis"],
+          "maxLength": 16
+        },
+        "smokeColorHex": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "maxLength": 7
+        },
+        "underglowHex": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "rideHeight": { "type": "number" },
+        "camber": { "type": "number" },
+        "gearRatio": { "type": "number" },
+        "brakeBias": { "type": "number" },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "carId",
+        "engineTier",
+        "turboTier",
+        "diffTier",
+        "tireTier",
+        "suspensionTier",
+        "brakeTier",
+        "unlockedParts",
+        "paintHex",
+        "paintFinish",
+        "rimColorHex",
+        "rimStyle",
+        "bodykit",
+        "spoiler",
+        "smokeColorHex",
+        "underglowHex",
+        "rideHeight",
+        "camber",
+        "gearRatio",
+        "brakeBias",
+        "updatedAt"
+      ]
+    },
+    "StorePurchase": {
+      "title": "StorePurchase",
+      "description": "Developer monetization purchase receipt for real-money Apex Credits or car bundles.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "packageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "packageName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "amountIdr": { "type": "number" },
+        "creditsGranted": { "type": "number" },
+        "unlockedCarId": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["qris", "ewallet", "va", "card"],
+          "maxLength": 16
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed"],
+          "maxLength": 16
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "packageId",
+        "packageName",
+        "amountIdr",
+        "creditsGranted",
+        "unlockedCarId",
+        "paymentMethod",
+        "status",
+        "createdAt"
+      ]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Global online drift score entry per track and player.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "trackId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "driverName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "carName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50
+        },
+        "carSpec": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "score": { "type": "number" },
+        "maxCombo": { "type": "number" },
+        "horsepower": { "type": "number" },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "trackId",
+        "driverName",
+        "carName",
+        "carSpec",
+        "score",
+        "maxCombo",
+        "horsepower",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Player garage profile, currencies, and career reputation"
+    },
+    "/users/{userId}/builds/{carId}": {
+      "schema": { "$ref": "#/entities/CarBuild" },
+      "description": "Player custom build & tuning settings per car"
+    },
+    "/users/{userId}/purchases/{purchaseId}": {
+      "schema": { "$ref": "#/entities/StorePurchase" },
+      "description": "Real-money developer shop purchase receipts"
+    },
+    "/tracks/{trackId}/leaderboard/{userId}": {
+      "schema": { "$ref": "#/entities/LeaderboardEntry" },
+      "description": "Global online leaderboard per drift track"
+    }
+  }
+}
