@@ -255,7 +255,7 @@ export const ProShopPanel: React.FC<ProShopPanelProps> = ({
             <div className="flex items-start gap-2 text-[11px] text-slate-400 bg-slate-950/70 p-2.5 rounded-lg border border-slate-800">
               <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
               <span>
-                Mode Demo Sandbox: Transaksi mencatat struk ke Firestore dan langsung membuka item tanpa memotong saldo bank asli.
+                Pembayaran diproses aman oleh Midtrans. Metode bayar final dipilih di jendela Midtrans, dan item masuk otomatis setelah pembayaran terverifikasi.
               </span>
             </div>
 

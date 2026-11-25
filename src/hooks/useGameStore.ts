@@ -21,6 +21,7 @@ import {
   UPGRADE_PART_TIERS,
 } from '../data/catalog';
 import { driftAudio } from '../engine/audioEngine';
+import { startMidtransCheckout } from '../payments/midtrans';
 import {
   auth,
   db,
@@ -64,9 +65,9 @@ function normalizeCarId(rawId: string | undefined): CarId {
 
 const DEFAULT_STARTER_DRIFT_COINS = 2500;
 // TODO(publish): Ubah ke null sebelum publish untuk mengembalikan Drift Coins default (2.500 DC)
-const TEMP_DEV_FULL_COINS: number | null = 9999999;
+const TEMP_DEV_FULL_COINS: number | null = null;
 // TODO(publish): Ubah ke false sebelum publish untuk mengembalikan sistem kunci track berdasarkan REP
-export const TEMP_DEV_UNLOCK_ALL_TRACKS = true;
+export const TEMP_DEV_UNLOCK_ALL_TRACKS = false;
 
 function normalizeProfile(raw: UserProfile): UserProfile {
   const mappedOwned = Array.from(
@@ -75,10 +76,13 @@ function normalizeProfile(raw: UserProfile): UserProfile {
   if (mappedOwned.length === 0) mappedOwned.push('carry_futura');
   const active = normalizeCarId(raw.activeCarId);
   if (!mappedOwned.includes(active)) mappedOwned.push(active);
+  // Reset the leftover dev-test balance (9,999,999 DC) back to the starter amount
   const driftCoins =
     TEMP_DEV_FULL_COINS !== null && raw.driftCoins < 5000000
       ? TEMP_DEV_FULL_COINS
-      : raw.driftCoins;
+      : raw.driftCoins >= 5000000
+        ? DEFAULT_STARTER_DRIFT_COINS
+        : raw.driftCoins;
   return {
     ...raw,
     driftCoins,
@@ -753,6 +757,84 @@ export function useGameStore() {
     [profile, showToast, syncBuildUpdate, syncProfileUpdate, user],
   );
 
+  // Real-money purchase: the server grants everything after Midtrans confirms payment.
+  // The client only opens the popup, then re-reads the profile the server wrote.
+  const purchaseWithMidtrans = useCallback(
+    async (pkg: StorePackage) => {
+      if (!user) {
+        showToast('Masuk dengan Google dulu untuk membeli.', 'warn');
+        return;
+      }
+      const uid = user.uid;
+
+      const reloadFromCloud = async () => {
+        const snap = await getDoc(doc(db, 'users', uid));
+        if (!snap.exists()) return null;
+        const fresh = normalizeProfile(snap.data() as UserProfile);
+        setProfile(fresh);
+
+        const buildsSnap = await getDocs(collection(db, 'users', uid, 'builds'));
+        const nextBuilds = createAllDefaultBuilds();
+        buildsSnap.forEach((bDoc) => {
+          const bData = bDoc.data() as CarBuildConfig;
+          const normId = normalizeCarId(bData.carId);
+          nextBuilds[normId] = normalizeBuild(normId, bData);
+        });
+        setBuilds(nextBuilds);
+
+        const purSnap = await getDocs(
+          query(collection(db, 'users', uid, 'purchases'), orderBy('createdAt', 'desc'), limit(20)),
+        );
+        const list: StorePurchase[] = [];
+        purSnap.forEach((pDoc) => {
+          list.push({ id: pDoc.id, ...(pDoc.data() as Omit<StorePurchase, 'id'>) });
+        });
+        setPurchases(list);
+        return { fresh, count: list.length };
+      };
+
+      try {
+        const before = await reloadFromCloud();
+        const outcome = await startMidtransCheckout(pkg.id);
+
+        if (outcome === 'closed') {
+          showToast('Pembayaran dibatalkan.', 'warn');
+          return;
+        }
+        if (outcome === 'error') {
+          showToast('Pembayaran gagal. Silakan coba lagi.', 'warn');
+          return;
+        }
+
+        showToast(
+          outcome === 'pending'
+            ? 'Menunggu pembayaran. Item masuk otomatis setelah lunas.'
+            : 'Pembayaran diterima, memverifikasi...',
+        );
+
+        // Webhook can arrive a few seconds late: poll until the server has written the receipt.
+        for (let i = 0; i < 15; i++) {
+          await new Promise((r) => window.setTimeout(r, 2000));
+          const now = await reloadFromCloud();
+          if (now && (!before || now.count > before.count)) {
+            driftAudio.playChime('unlock');
+            showToast(`Pembelian ${pkg.name} berhasil!`);
+            return;
+          }
+        }
+        if (outcome === 'pending') {
+          showToast('Pembayaran belum lunas. Item masuk otomatis setelah lunas.');
+        } else {
+          showToast('Verifikasi memakan waktu. Muat ulang halaman sebentar lagi.', 'warn');
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Gagal memulai pembayaran.';
+        showToast(msg, 'warn');
+      }
+    },
+    [showToast, user],
+  );
+
   return {
     user,
     authReady,
@@ -775,5 +857,6 @@ export function useGameStore() {
     fetchLeaderboard,
     recordRunCompletion,
     completeStorePurchase,
+    purchaseWithMidtrans,
   };
 }

@@ -252,7 +252,7 @@ function GameApp() {
               profile={store.profile}
               purchases={store.purchases}
               isSignedIn={Boolean(store.user)}
-              onPurchase={store.completeStorePurchase}
+              onPurchase={store.purchaseWithMidtrans}
               onSignIn={store.signInGoogle}
             />
           )}

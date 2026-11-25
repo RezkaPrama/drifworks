@@ -42,13 +42,13 @@
 
 /* ---------- Bright daytime theme (Workshop hub only) ---------- */
 .theme-day {
-  --color-slate-950: #fbf6ea;
-  --color-slate-900: #ffffff;
-  --color-slate-800: #e6dfcf;
-  --color-slate-700: #d2c9b4;
-  --color-slate-600: #a89f8a;
-  --color-slate-500: #7a7364;
-  --color-slate-400: #5b5547;
+  --color-slate-950: #d9dce1;
+  --color-slate-900: #e6e8ec;
+  --color-slate-800: #c5c9d0;
+  --color-slate-700: #b0b5bd;
+  --color-slate-600: #8e949e;
+  --color-slate-500: #6b717b;
+  --color-slate-400: #50565f;
   --color-slate-300: #44403c;
   --color-slate-200: #292524;
   --color-slate-100: #1c1917;
@@ -59,13 +59,13 @@
 
 .theme-day [class*="bg-[#0d121c]"],
 .theme-day [class*="bg-[#0b0f17]"] {
-  background-color: rgba(255, 252, 244, 0.93) !important;
+  background-color: rgba(218, 221, 226, 0.94) !important;
   backdrop-filter: blur(6px);
 }
 
 .theme-day .shadow-2xl,
 .theme-day [class*="bg-[#0d121c]"] {
-  box-shadow: 0 10px 30px rgba(80, 60, 20, 0.18);
+  box-shadow: 0 10px 30px rgba(30, 35, 45, 0.22);
 }
 
 /* Text sitting on amber/cyan buttons must stay dark */

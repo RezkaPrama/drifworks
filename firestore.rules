@@ -153,6 +153,7 @@ service cloud.firestore {
         && isValidUserProfile(incoming(), userId)
         && incoming().uid == existing().uid
         && incoming().createdAt == existing().createdAt
+        && incoming().apexCredits <= existing().apexCredits
         && incoming().updatedAt == request.time
         && (
           incoming().diff(existing()).affectedKeys().hasOnly([
@@ -196,7 +197,7 @@ service cloud.firestore {
           && isValidId(purchaseId)
           && isOwner(userId)
           && isVerified()
-          && isValidStorePurchase(incoming(), userId)
+          && false // purchases are written only by the server (Admin SDK) after Midtrans verification
           && incoming().createdAt == request.time
           && exists(/databases/$(database)/documents/users/$(userId));
         allow update, delete: if false;
