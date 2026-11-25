@@ -9,6 +9,9 @@ export interface InputState {
   handbrake: boolean;
   clutchKick: boolean;
   boost: boolean;
+  shiftUp: boolean;
+  shiftDown: boolean;
+  toggleTransmission: boolean;
   gamepadConnected: boolean;
   gamepadName: string | null;
 }
@@ -49,6 +52,16 @@ export class DriftPhysicsCar {
   private steerLevelTimer = 0;
   private throttleLevelTimer = 0;
   private brakeLevelTimer = 0;
+  private level10HoldTimer = 0;
+  public throttlePump = 0; // 0..1, naik saat gas dikocok (tekan-lepas), turun perlahan jika gas ditahan
+  private prevThrottleLevel = 0;
+
+  // Transmisi: AUTO mengikuti kecepatan, MANUAL diatur pemain (X naik gigi, Z turun gigi, T ganti mode)
+  public transmissionMode: 'AUTO' | 'MANUAL' = 'AUTO';
+  private manualGear = 1;
+  private prevShiftUp = false;
+  private prevShiftDown = false;
+  private prevToggleTransmission = false;
 
   // Vehicle condition
   public bodyIntegrity = 100;
@@ -119,6 +132,9 @@ export class DriftPhysicsCar {
     this.steerLevelTimer = 0;
     this.throttleLevelTimer = 0;
     this.brakeLevelTimer = 0;
+    this.level10HoldTimer = 0;
+    this.throttlePump = 0;
+    this.prevThrottleLevel = 0;
     this.prevHandbrake = false;
     this.prevClutchKick = false;
     this.wasInSlide = false;
@@ -240,8 +256,8 @@ export class DriftPhysicsCar {
     // --- LEVEL-BASED CONTROLS (steer -5..+5, throttle 0..5, brake 0..5) ---
     // Steer: tiap tekan menggeser 1 level. Saat drift kanan di level -5, tekan kiri
     // hanya menurunkan ke -4, -3, ... sampai 0 (lurus), baru lanjut ke sisi kiri.
-    const steerTarget = Math.round(THREE.MathUtils.clamp(rawInput.steer, -1, 1) * 5);
-    const steerAdv = this.advanceLevel(this.steerLevel, steerTarget, this.steerLevelTimer, clampedDt, 0.11, 0.1);
+    const steerTarget = Math.round(THREE.MathUtils.clamp(rawInput.steer, -1, 1) * 10);
+    const steerAdv = this.advanceLevel(this.steerLevel, steerTarget, this.steerLevelTimer, clampedDt, 0.06, 0.05);
     this.steerLevel = steerAdv.level;
     this.steerLevelTimer = steerAdv.timer;
 
@@ -250,18 +266,31 @@ export class DriftPhysicsCar {
     this.throttleLevel = throttleAdv.level;
     this.throttleLevelTimer = throttleAdv.timer;
 
+    // Gas dikocok: tiap level gas turun (lepas gas) menambah pump; ditahan penuh -> pump meluruh ke 0
+    if (this.throttleLevel < this.prevThrottleLevel && this.prevThrottleLevel >= 2) {
+      this.throttlePump = Math.min(1, this.throttlePump + (this.prevThrottleLevel - this.throttleLevel) * 0.16);
+    }
+    this.throttlePump = Math.max(0, this.throttlePump - clampedDt * 0.55);
+    this.prevThrottleLevel = this.throttleLevel;
+
     const brakeTarget = rawInput.brake > 0.04 ? Math.ceil(Math.min(1, rawInput.brake) * 5) : 0;
     const brakeAdv = this.advanceLevel(this.brakeLevel, brakeTarget, this.brakeLevelTimer, clampedDt, 0.09, 0.06);
     this.brakeLevel = brakeAdv.level;
     this.brakeLevelTimer = brakeAdv.timer;
 
-    this.levelSteerValue = this.steerLevel / 5;
+    this.levelSteerValue = this.steerLevel / 10;
     const input: InputState = {
       ...rawInput,
       steer: this.levelSteerValue,
       throttle: this.throttleLevel / 5,
       brake: this.brakeLevel / 5,
     };
+
+    // Efek level steer terhadap grip & kemiringan: level 0-3 grip penuh, makin tinggi makin licin (level 10 ~55%).
+    // Level 8-9 = kemiringan ekstrem, level 10 = over-rotation (melintir).
+    const absSteerLevel = Math.abs(this.steerLevel);
+    const levelGripScale = absSteerLevel <= 3 ? 1.0 : 1.0 - (absSteerLevel - 3) * 0.065;
+    const levelTiltBoost = absSteerLevel >= 8 ? 1 + (absSteerLevel - 7) * 0.22 : 1.0;
 
     // Local forward & right/left basis vectors (heading=0 faces +Z)
     const sinH = Math.sin(this.heading);
@@ -432,7 +461,18 @@ export class DriftPhysicsCar {
     // --- 2. ENGINE ACCELERATION, REAR BURNOUT TRACTION LOSS & DRIFT SPEED CONTROL ---
     const maxSpeedMs = stats.maxSpeedKmh / 3.6;
     const boostMult = this.isBoosting ? 1.38 * stats.boostPower : 1.0;
-    const driveAccel = (19 + stats.powerFactor * 13.0) * boostMult;
+    // Pengaruh gigi pada akselerasi (hanya mode MANUAL): gigi rendah = tarikan kuat, gigi tinggi = lemah,
+    // gigi terlalu tinggi untuk kecepatan = lugging, gigi terlalu rendah = kena limiter.
+    let gearAccelScale = 1.0;
+    if (this.transmissionMode === 'MANUAL') {
+      const speedNormNow = THREE.MathUtils.clamp(Math.max(0, forwardVel) / maxSpeedMs, 0, 1.2);
+      const gearPos = speedNormNow * 5 - (this.manualGear - 1);
+      const baseScale = [1.35, 1.15, 1.0, 0.85, 0.72][this.manualGear - 1] ?? 1.0;
+      const lugPenalty = gearPos < 0 ? Math.max(0.45, 1 + gearPos * 0.55) : 1.0;
+      const limiterPenalty = gearPos > 1 ? Math.max(0.15, 1 - (gearPos - 1) * 1.4) : 1.0;
+      gearAccelScale = baseScale * lugPenalty * limiterPenalty;
+    }
+    const driveAccel = (19 + stats.powerFactor * 13.0) * boostMult * gearAccelScale;
 
     if (!inSpinOut && input.throttle > 0) {
       const speedRatio = Math.max(0, forwardVel / (maxSpeedMs * boostMult));
@@ -445,11 +485,20 @@ export class DriftPhysicsCar {
         (0.21 + build.tireTier * 0.065) *
         tireGripFactor *
         (1 - angleLossFactor * 0.34);
-      const forwardDriveScale = THREE.MathUtils.lerp(1.0, Math.max(0.14, burnoutBite), slideLoose);
+      // Gas dikocok (tekan-lepas): ban belakang sempat menggigit lagi -> bite naik, batas kecepatan drift longgar
+      const pump = this.throttlePump;
+      const forwardDriveScale = THREE.MathUtils.lerp(
+        1.0,
+        Math.max(0.14, burnoutBite + pump * 0.24),
+        slideLoose,
+      );
 
       // Gentle drift flow ceiling (~62-84 km/h depending on tires/boost) so drifting mirrors Tandem AI pace
       const driftFlowCapMs =
-        (18.5 + stats.powerFactor * 4.2 + build.tireTier * 1.4) * (this.isBoosting ? 1.24 : 1.0);
+        (18.5 + stats.powerFactor * 4.2 + build.tireTier * 1.4) *
+        (this.isBoosting ? 1.24 : 1.0) *
+        (1 + pump * 0.28);
+      forwardVel += pump * 3.2 * clampedDt;
       const burnoutCapFactor =
         slideLoose > 0.34 && forwardVel > driftFlowCapMs
           ? Math.max(0.12, 1 - (forwardVel - driftFlowCapMs) / 7.5)
@@ -527,7 +576,8 @@ export class DriftPhysicsCar {
       sensScale *
       highSpeedDamp *
       rideHeightSnap *
-      speedTurnFactor;
+      speedTurnFactor *
+      levelTiltBoost;
 
     // Progressive Hold-to-Switch Transition Levels weighted by speed, momentum, and suspension/steering kit
     const suspTransitionBonus = 1 + build.suspensionTier * 0.2 + build.diffTier * 0.08;
@@ -637,10 +687,24 @@ export class DriftPhysicsCar {
         this.oversteerRisk = Math.max(0, this.oversteerRisk - clampedDt * 2.5);
       }
 
+      // Level steer 10 ditahan = over-rotation: penghitung naik, lalu mobil melintir
+      if (absSteerLevel >= 10 && slideLoose > 0.3 && currentSpeedKmh > 30) {
+        this.level10HoldTimer += clampedDt;
+        this.oversteerRisk = Math.max(
+          this.oversteerRisk,
+          THREE.MathUtils.clamp(this.level10HoldTimer / 0.5, 0.2, 1.0),
+        );
+      } else {
+        this.level10HoldTimer = Math.max(0, this.level10HoldTimer - clampedDt * 3);
+      }
+      const level10Spin = this.level10HoldTimer >= 0.5;
+
       if (
+        level10Spin ||
         (absSlipDegNow >= spinThresholdDeg && (pushingOver || absSlipDegNow >= 84)) ||
         (absSlipDegNow >= 68 && Math.abs(this.angularVelocity) > 2.45 && pushingOver)
       ) {
+        this.level10HoldTimer = 0;
         this.spinOutTimer = 1.1;
         this.spinOutDir = driftDir !== 0 ? driftDir : Math.sign(this.angularVelocity || 1);
         this.angularVelocity = this.spinOutDir * 4.5;
@@ -681,7 +745,8 @@ export class DriftPhysicsCar {
       (0.58 + (1 - Math.min(0.85, stats.driftSlipFactor * 0.65)) * 0.66) *
       (input.handbrake ? 0.5 : 1.0) *
       transitionCarryScale;
-    const lateralGripDecay = THREE.MathUtils.lerp(gripDecay, slideDecay, slideLoose);
+    const lateralGripDecay =
+      THREE.MathUtils.lerp(gripDecay, slideDecay, slideLoose) * levelGripScale;
 
     const nSinH = Math.sin(this.heading);
     const nCosH = Math.cos(this.heading);
@@ -746,9 +811,10 @@ export class DriftPhysicsCar {
     // AI-style expressive body roll leaning cleanly with drift angle + lateral G
     const targetRoll = THREE.MathUtils.clamp(
       (slipRad * 0.16 + lateralVel * 0.011 + this.angularVelocity * 0.025) *
-        (1 - build.suspensionTier * 0.08 + build.rideHeight * 0.1),
-      -0.21,
-      0.21,
+        (1 - build.suspensionTier * 0.08 + build.rideHeight * 0.1) *
+        levelTiltBoost,
+      -0.21 * levelTiltBoost,
+      0.21 * levelTiltBoost,
     );
     const targetPitch = THREE.MathUtils.clamp(
       (input.brake * 0.075 -
@@ -789,9 +855,31 @@ export class DriftPhysicsCar {
 
     this.maxRpm = 7200 + build.engineTier * 700;
     const speedNorm = Math.min(1, this.speedKmh / stats.maxSpeedKmh);
-    const gearFloat = 1 + speedNorm * 4.5;
-    this.gear = Math.min(5, Math.max(1, Math.floor(gearFloat)));
-    const gearFrac = gearFloat - Math.floor(gearFloat);
+    // Transmisi: T ganti mode, X naik gigi, Z turun gigi (satu tekanan = satu gigi)
+    if (input.toggleTransmission && !this.prevToggleTransmission) {
+      this.transmissionMode = this.transmissionMode === 'AUTO' ? 'MANUAL' : 'AUTO';
+      if (this.transmissionMode === 'MANUAL') this.manualGear = this.gear;
+      this.activeZoneBanner = `TRANSMISI: ${this.transmissionMode}`;
+      this.activeZoneBannerTimer = 1.0;
+    }
+    if (this.transmissionMode === 'MANUAL') {
+      if (input.shiftUp && !this.prevShiftUp) this.manualGear = Math.min(5, this.manualGear + 1);
+      if (input.shiftDown && !this.prevShiftDown) this.manualGear = Math.max(1, this.manualGear - 1);
+    }
+    this.prevShiftUp = input.shiftUp;
+    this.prevShiftDown = input.shiftDown;
+    this.prevToggleTransmission = input.toggleTransmission;
+
+    let gearFrac: number;
+    if (this.transmissionMode === 'MANUAL') {
+      this.gear = this.manualGear;
+      // Posisi kecepatan di dalam rentang gigi terpilih: terlalu rendah = RPM jatuh, terlalu tinggi = mentok limiter
+      gearFrac = THREE.MathUtils.clamp(speedNorm * 5 - (this.manualGear - 1), 0, 1);
+    } else {
+      const gearFloat = 1 + speedNorm * 4.5;
+      this.gear = Math.min(5, Math.max(1, Math.floor(gearFloat)));
+      gearFrac = gearFloat - Math.floor(gearFloat);
+    }
     const wheelspinFlare = slideLoose * input.throttle * 1950 + this.clutchRpmFlare;
     const targetRpm =
       1400 + (0.35 + gearFrac * 0.65) * (this.maxRpm - 1400) + wheelspinFlare;
@@ -1053,6 +1141,9 @@ export function pollUnifiedInput(
     handbrake,
     clutchKick,
     boost,
+    shiftUp: Boolean(keys['KeyX']),
+    shiftDown: Boolean(keys['KeyZ']),
+    toggleTransmission: Boolean(keys['KeyT']),
     gamepadConnected,
     gamepadName,
   };

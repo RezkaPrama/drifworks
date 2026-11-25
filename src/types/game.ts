@@ -36,7 +36,8 @@ export type TrackId =
   | 'harbor_toybox'
   | 'sunset_canyon'
   | 'sakura_touge'
-  | 'neon_docks';
+  | 'neon_docks'
+  | 'practice_yard';
 
 export type PaintFinish = 'gloss' | 'metallic' | 'matte';
 export type RimStyle = 'steel' | 'spoke5' | 'mesh' | 'turbofan';
@@ -137,6 +138,8 @@ export interface TrackDefinition {
   propTheme: 'harbor' | 'canyon' | 'sakura' | 'neon';
   waypoints: [number, number][];
   clipZones: number[];
+  layout?: 'circuit' | 'arena'; // default 'circuit' (spline); 'arena' = lapangan latihan donut & figure-8
+  arenaRadius?: number; // radius lapangan aspal (meter) khusus layout 'arena'
 }
 
 export interface UserProfile {
@@ -202,6 +205,7 @@ export interface TelemetryState {
   steerLevel: number; // -5 (kanan penuh) .. 0 (lurus) .. +5 (kiri penuh)
   throttleLevel: number; // 0..5
   brakeLevel: number; // 0..5
+  transmissionMode: 'AUTO' | 'MANUAL';
   driftPhase: 'GRIP' | 'INITIATE' | 'SLIDE' | 'BALANCE';
   bankedScore: number;
   liveDriftScore: number;

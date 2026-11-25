@@ -31,6 +31,7 @@ const INITIAL_TELEMETRY: TelemetryState = {
   steerLevel: 0,
   throttleLevel: 0,
   brakeLevel: 0,
+  transmissionMode: 'AUTO',
   driftPhase: 'GRIP',
   bankedScore: 0,
   liveDriftScore: 0,

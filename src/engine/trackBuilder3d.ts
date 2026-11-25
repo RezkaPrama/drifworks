@@ -212,10 +212,357 @@ function createCurbTexture(
   return tex;
 }
 
+function buildArenaWorld(track: TrackDefinition): TrackWorld {
+  const group = new THREE.Group();
+  const disposables: { dispose: () => void }[] = [];
+  const register = <T extends { dispose: () => void }>(d: T): T => {
+    disposables.push(d);
+    return d;
+  };
+  const palette = getThemePalette('harbor');
+  const R = track.arenaRadius ?? track.roadWidth / 2;
+  const up = new THREE.Vector3(0, 1, 0);
+  const dummy = new THREE.Object3D();
+  const tint = new THREE.Color();
+
+  const curve = new THREE.CatmullRomCurve3(
+    track.waypoints.map(([x, z]) => new THREE.Vector3(x, 0, z)),
+    true,
+    'catmullrom',
+    0.5,
+  );
+  const sampleCount = 360;
+  const samples: TrackSamplePoint[] = [];
+  for (let i = 0; i < sampleCount; i++) {
+    const t = i / sampleCount;
+    const point = curve.getPointAt(t);
+    const tangent = curve.getTangentAt(t).normalize();
+    const normal = new THREE.Vector3().crossVectors(up, tangent).normalize();
+    samples.push({ point, tangent, normal, t });
+  }
+
+  // Sky dome
+  const skyMat = register(
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uZenith: { value: new THREE.Color(palette.skyZenith) },
+        uHorizon: { value: new THREE.Color(palette.skyHorizon) },
+      },
+      vertexShader: `
+        varying vec3 vWorldPos;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldPos = wp.xyz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uZenith;
+        uniform vec3 uHorizon;
+        varying vec3 vWorldPos;
+        void main() {
+          float h = clamp(normalize(vWorldPos).y * 2.2, 0.0, 1.0);
+          gl_FragColor = vec4(mix(uHorizon, uZenith, pow(h, 0.72)), 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+    }),
+  );
+  group.add(new THREE.Mesh(register(new THREE.SphereGeometry(680, 24, 16)), skyMat));
+
+  // Ground + asphalt disc + curb ring
+  const ground = new THREE.Mesh(
+    register(new THREE.PlaneGeometry(1800, 1800)),
+    register(new THREE.MeshStandardMaterial({ color: palette.hillColor, roughness: 0.94 })),
+  );
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -0.06;
+  ground.receiveShadow = true;
+  group.add(ground);
+
+  const asphalt = new THREE.Mesh(
+    register(new THREE.CircleGeometry(R + 0.5, 96)),
+    register(new THREE.MeshStandardMaterial({ color: 0x2b323e, roughness: 0.55, metalness: 0.08 })),
+  );
+  asphalt.rotation.x = -Math.PI / 2;
+  asphalt.position.y = 0.02;
+  asphalt.receiveShadow = true;
+  group.add(asphalt);
+
+  const curbRing = new THREE.Mesh(
+    register(new THREE.RingGeometry(R + 0.5, R + 2.6, 96)),
+    register(new THREE.MeshStandardMaterial({ color: new THREE.Color(track.curbAccent), roughness: 0.65 })),
+  );
+  curbRing.rotation.x = -Math.PI / 2;
+  curbRing.position.y = 0.03;
+  group.add(curbRing);
+
+  // Painted guide lines: figure-8 (two touching rings on the Z axis) + donut pad
+  const paintMat = register(
+    new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.8, side: THREE.DoubleSide }),
+  );
+  const f8R = 22;
+  const addPaintRing = (cx: number, cz: number, r: number, w: number, mat: THREE.Material) => {
+    const m = new THREE.Mesh(register(new THREE.RingGeometry(r - w / 2, r + w / 2, 72)), mat);
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(cx, 0.045, cz);
+    group.add(m);
+  };
+  addPaintRing(0, -f8R, f8R, 0.35, paintMat);
+  addPaintRing(0, f8R, f8R, 0.35, paintMat);
+  const donutMat = register(
+    new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.7, side: THREE.DoubleSide }),
+  );
+  const donutX = -62;
+  addPaintRing(donutX, 0, 9, 0.5, donutMat);
+  addPaintRing(donutX, 0, 15, 0.35, donutMat);
+
+  // Traffic cones along both figure-8 rings, plus the donut center cone
+  const coneGeo = register(new THREE.ConeGeometry(0.42, 1.0, 8));
+  const coneMat = register(new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.6, flatShading: true }));
+  const coneCount = 36 + 1;
+  const coneInst = new THREE.InstancedMesh(coneGeo, coneMat, coneCount);
+  coneInst.castShadow = true;
+  let ci = 0;
+  [-f8R, f8R].forEach((cz) => {
+    for (let k = 0; k < 18; k++) {
+      const a = (k / 18) * Math.PI * 2;
+      dummy.position.set(Math.cos(a) * f8R, 0.5, cz + Math.sin(a) * f8R);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      coneInst.setMatrixAt(ci++, dummy.matrix);
+    }
+  });
+  dummy.position.set(donutX, 0.5, 0);
+  dummy.updateMatrix();
+  coneInst.setMatrixAt(ci++, dummy.matrix);
+  coneInst.instanceMatrix.needsUpdate = true;
+  coneInst.computeBoundingSphere();
+  group.add(coneInst);
+
+  // Wooden post-and-rail fence ring
+  const fenceR = R + 3.4;
+  const postCount = 220;
+  const woodMat = register(
+    new THREE.MeshStandardMaterial({ color: palette.fenceWoodColor, roughness: 0.88, flatShading: true }),
+  );
+  const postInst = new THREE.InstancedMesh(register(new THREE.BoxGeometry(0.24, 1.38, 0.24)), woodMat, postCount);
+  postInst.castShadow = true;
+  for (let i = 0; i < postCount; i++) {
+    const a = (i / postCount) * Math.PI * 2;
+    dummy.position.set(Math.cos(a) * fenceR, 0.68, Math.sin(a) * fenceR);
+    dummy.rotation.set(0, -a, 0);
+    dummy.scale.set(1, 1, 1);
+    dummy.updateMatrix();
+    postInst.setMatrixAt(i, dummy.matrix);
+  }
+  postInst.instanceMatrix.needsUpdate = true;
+  postInst.computeBoundingSphere();
+  group.add(postInst);
+  const railGeo = register(new THREE.TorusGeometry(fenceR, 0.07, 6, 160));
+  [1.08, 0.56].forEach((y) => {
+    const rail = new THREE.Mesh(railGeo, woodMat);
+    rail.rotation.x = Math.PI / 2;
+    rail.position.y = y;
+    group.add(rail);
+  });
+
+  // Cheering spectators behind the fence
+  const specCount = 72;
+  const shirtPalette = [0xef4444, 0x2563eb, 0xf59e0b, 0x10b981, 0xf8fafc, 0xf97316];
+  const torsoInst = new THREE.InstancedMesh(
+    register(new THREE.BoxGeometry(0.48, 0.9, 0.28)),
+    register(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7, flatShading: true })),
+    specCount,
+  );
+  const headInst = new THREE.InstancedMesh(
+    register(new THREE.IcosahedronGeometry(0.21, 0)),
+    register(new THREE.MeshStandardMaterial({ color: 0xfdba74, roughness: 0.75, flatShading: true })),
+    specCount,
+  );
+  torsoInst.frustumCulled = false;
+  headInst.frustumCulled = false;
+  const specs: { x: number; z: number; yaw: number; phase: number }[] = [];
+  for (let i = 0; i < specCount; i++) {
+    const cluster = Math.floor(i / 12);
+    const a = (cluster / 6) * Math.PI * 2 + 0.3 + ((i % 12) - 6) * 0.018;
+    const r = fenceR + 1.9 + (i % 2) * 0.6;
+    specs.push({ x: Math.cos(a) * r, z: Math.sin(a) * r, yaw: -a + Math.PI / 2, phase: i * 0.72 });
+    tint.setHex(shirtPalette[i % shirtPalette.length]);
+    torsoInst.setColorAt(i, tint);
+  }
+  if (torsoInst.instanceColor) torsoInst.instanceColor.needsUpdate = true;
+  group.add(torsoInst, headInst);
+
+  // Pines, cliffs and mountains outside the arena
+  const trunkGeo = register(new THREE.CylinderGeometry(0.36, 0.56, 3.6, 6));
+  const trunkMat = register(new THREE.MeshStandardMaterial({ color: palette.trunkColor, roughness: 0.9, flatShading: true }));
+  const pineMat = register(new THREE.MeshStandardMaterial({ color: palette.pineColor, roughness: 0.82, flatShading: true }));
+  const pineGeos = [
+    register(new THREE.ConeGeometry(2.6, 3.8, 7)),
+    register(new THREE.ConeGeometry(2.05, 3.4, 7)),
+    register(new THREE.ConeGeometry(1.45, 2.9, 7)),
+  ];
+  const pineCount = 70;
+  const pineTrunks = new THREE.InstancedMesh(trunkGeo, trunkMat, pineCount);
+  const pineTiers = pineGeos.map((g) => new THREE.InstancedMesh(g, pineMat, pineCount));
+  const tierY = [4.0, 6.1, 7.9];
+  for (let i = 0; i < pineCount; i++) {
+    const a = (i / pineCount) * Math.PI * 2 + (i % 3) * 0.04;
+    const r = fenceR + 18 + (i % 5) * 9;
+    const px = Math.cos(a) * r;
+    const pz = Math.sin(a) * r;
+    const sc = 0.9 + ((i * 31) % 9) * 0.08;
+    dummy.position.set(px, 1.8 * sc, pz);
+    dummy.rotation.set(0, i * 0.9, 0);
+    dummy.scale.set(sc, sc, sc);
+    dummy.updateMatrix();
+    pineTrunks.setMatrixAt(i, dummy.matrix);
+    pineTiers.forEach((tier, ti) => {
+      dummy.position.set(px, tierY[ti] * sc, pz);
+      dummy.updateMatrix();
+      tier.setMatrixAt(i, dummy.matrix);
+    });
+  }
+  [pineTrunks, ...pineTiers].forEach((m) => {
+    m.instanceMatrix.needsUpdate = true;
+    m.castShadow = true;
+    m.frustumCulled = false;
+    group.add(m);
+  });
+
+  const cliffCount = 26;
+  const cliffInst = new THREE.InstancedMesh(
+    register(new THREE.DodecahedronGeometry(1, 0)),
+    register(new THREE.MeshStandardMaterial({ color: palette.cliffColor, roughness: 0.92, flatShading: true })),
+    cliffCount,
+  );
+  cliffInst.castShadow = true;
+  for (let i = 0; i < cliffCount; i++) {
+    const a = (i / cliffCount) * Math.PI * 1.1 - 0.2;
+    const r = fenceR + 24 + (i % 3) * 7;
+    const w = 9 + ((i * 19) % 7) * 1.5;
+    const h = 10 + ((i * 23) % 9) * 2.0;
+    dummy.position.set(Math.cos(a) * r, h * 0.42, Math.sin(a) * r);
+    dummy.rotation.set((i % 3) * 0.12, i * 0.7, ((i + 1) % 3) * 0.08);
+    dummy.scale.set(w, h, w * 1.1);
+    dummy.updateMatrix();
+    cliffInst.setMatrixAt(i, dummy.matrix);
+    tint.setHex(palette.cliffColor).offsetHSL(0, 0, ((i % 4) - 1.5) * 0.035);
+    cliffInst.setColorAt(i, tint);
+  }
+  cliffInst.instanceMatrix.needsUpdate = true;
+  if (cliffInst.instanceColor) cliffInst.instanceColor.needsUpdate = true;
+  cliffInst.computeBoundingSphere();
+  group.add(cliffInst);
+
+  const mountainCount = 24;
+  const mountainInst = new THREE.InstancedMesh(
+    register(new THREE.ConeGeometry(68, 72, 6)),
+    register(new THREE.MeshStandardMaterial({ color: palette.distantHillColor, roughness: 0.96, flatShading: true })),
+    mountainCount,
+  );
+  for (let m = 0; m < mountainCount; m++) {
+    const ang = (m / mountainCount) * Math.PI * 2;
+    const rad = 330 + (m % 3) * 55;
+    const sc = 0.9 + (m % 4) * 0.35;
+    dummy.position.set(Math.cos(ang) * rad, 28 * sc, Math.sin(ang) * rad);
+    dummy.rotation.set(0, m * 0.8, 0);
+    dummy.scale.set(sc * 1.35, sc, sc * 1.2);
+    dummy.updateMatrix();
+    mountainInst.setMatrixAt(m, dummy.matrix);
+  }
+  mountainInst.instanceMatrix.needsUpdate = true;
+  mountainInst.computeBoundingSphere();
+  group.add(mountainInst);
+
+  // Faceted low-poly clouds
+  const cloudPuffGeo = register(new THREE.IcosahedronGeometry(13, 0));
+  const cloudMat = register(new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.92, flatShading: true }));
+  const cloudItems: { mesh: THREE.Group; baseX: number; baseY: number; speed: number }[] = [];
+  for (let c = 0; c < 22; c++) {
+    const cg = new THREE.Group();
+    const angle = (c / 22) * Math.PI * 2;
+    const rad = 220 + (c % 3) * 85;
+    for (let p = 0; p < 4; p++) {
+      const puff = new THREE.Mesh(cloudPuffGeo, cloudMat);
+      puff.position.set((p - 1.5) * 12, p === 1 || p === 2 ? 4.5 : 0, (p % 2) * 5);
+      puff.scale.set(1.3 - Math.abs(p - 1.5) * 0.16, 0.72, 0.9);
+      cg.add(puff);
+    }
+    const bx = Math.cos(angle) * rad;
+    const by = 68 + (c % 4) * 14;
+    cg.position.set(bx, by, Math.sin(angle) * rad);
+    group.add(cg);
+    cloudItems.push({ mesh: cg, baseX: bx, baseY: by, speed: 1.8 + (c % 4) * 0.65 });
+  }
+
+  const update = (elapsed: number) => {
+    for (let i = 0; i < specs.length; i++) {
+      const sp = specs[i];
+      const jump = Math.abs(Math.sin(elapsed * 4.8 + sp.phase)) * 0.2;
+      dummy.position.set(sp.x, 0.73 + jump, sp.z);
+      dummy.rotation.set(0, sp.yaw, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      torsoInst.setMatrixAt(i, dummy.matrix);
+      dummy.position.set(sp.x, 1.42 + jump, sp.z);
+      dummy.updateMatrix();
+      headInst.setMatrixAt(i, dummy.matrix);
+    }
+    torsoInst.instanceMatrix.needsUpdate = true;
+    headInst.instanceMatrix.needsUpdate = true;
+    for (let c = 0; c < cloudItems.length; c++) {
+      const it = cloudItems[c];
+      it.mesh.position.x = it.baseX + Math.sin(elapsed * 0.04 * it.speed + c) * 36;
+      it.mesh.position.y = it.baseY + Math.sin(elapsed * 0.25 + c) * 1.6;
+    }
+  };
+  update(0);
+
+  const centerPoint = new THREE.Vector3(0, 0, 0);
+  return {
+    group,
+    curve,
+    samples,
+    clipZoneCenters: [],
+    startPosition: new THREE.Vector3(0, 0, -(R - 28)),
+    startHeading: 0,
+    getTrackInfo: (x: number, z: number) => {
+      const dist = Math.hypot(x, z);
+      const nx = dist > 0.0001 ? x / dist : 1;
+      const nz = dist > 0.0001 ? z / dist : 0;
+      // 'closestPoint' = the arena center, so wall push-back (toward closestPoint) acts radially inward
+      // 'tangent' = counter-clockwise tangent at the car's angle around the arena
+      const tx = -nz;
+      const tz = nx;
+      const ang = Math.atan2(z, x);
+      return {
+        distFromCenter: dist,
+        closestPoint: centerPoint,
+        tangent: new THREE.Vector3(tx, 0, tz),
+        t: ((ang / (Math.PI * 2)) + 1) % 1,
+        activeClipZoneIndex: -1,
+        activeClipZoneType: null,
+      };
+    },
+    update,
+    dispose: () => {
+      disposables.forEach((d) => d.dispose());
+    },
+  };
+}
+
 export function buildTrackWorld(
   track: TrackDefinition,
   maxAnisotropy: number,
 ): TrackWorld {
+  if (track.layout === 'arena') {
+    return buildArenaWorld(track);
+  }
   const group = new THREE.Group();
   const disposables: { dispose: () => void }[] = [];
   const register = <T extends { dispose: () => void }>(d: T): T => {

@@ -551,7 +551,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
                 </span>
               </div>
               <div className="flex items-center justify-end gap-0.5">
-                {[-5, -4, -3, -2, -1, 1, 2, 3, 4, 5].map((lv) => {
+                {[-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((lv) => {
                   const active =
                     telemetry.steerLevel !== 0 &&
                     Math.sign(lv) === Math.sign(telemetry.steerLevel) &&
@@ -615,7 +615,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
                 {telemetry.speedKmh}
               </div>
               <div className="text-[10px] text-slate-400 mt-0.5">
-                KM/H · G{telemetry.gear}
+                KM/H · G{telemetry.gear} {telemetry.transmissionMode === 'MANUAL' ? '(MANUAL)' : '(AUTO)'}
               </div>
             </div>
           </div>

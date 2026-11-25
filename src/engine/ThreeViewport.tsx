@@ -29,6 +29,7 @@ interface ThreeViewportProps {
   trackId: TrackId;
   sessionKey: number;
   workshopPreset: WorkshopCameraPreset;
+  workshopPanelOpen?: boolean;
   raceCameraMode: RaceCameraMode;
   isPaused: boolean;
   touchControls: {
@@ -1254,6 +1255,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
             steerLevel: physics.steerLevel,
             throttleLevel: physics.throttleLevel,
             brakeLevel: physics.brakeLevel,
+            transmissionMode: physics.transmissionMode,
             driftPhase: physics.driftPhase,
             bankedScore: physics.bankedScore,
             liveDriftScore: Math.round(physics.liveDriftScore),

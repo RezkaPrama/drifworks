@@ -190,6 +190,7 @@ export function useGameStore() {
     sunset_canyon: [],
     sakura_touge: [],
     neon_docks: [],
+    practice_yard: [],
   });
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
