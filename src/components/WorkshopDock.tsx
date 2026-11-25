@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ChevronDown, ChevronUp, Lock, Check } from 'lucide-react';
 import {
   BODYKIT_OPTIONS,
@@ -39,6 +39,7 @@ interface WorkshopDockProps {
   ) => void;
   onUpdateTuning: (carId: CarId, patch: Partial<CarBuildConfig>) => void;
   onOpenShop: () => void;
+  onPanelOpenChange?: (open: boolean) => void;
 }
 
 export const WorkshopDock: React.FC<WorkshopDockProps> = ({
@@ -50,10 +51,17 @@ export const WorkshopDock: React.FC<WorkshopDockProps> = ({
   onApplyVisual,
   onUpdateTuning,
   onOpenShop,
+  onPanelOpenChange,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [subTab, setSubTab] = useState<WorkshopSubTab>('mesin');
   const [classFilter, setClassFilter] = useState<ClassFilter>('Semua');
+
+  // Tell the 3D viewport whether the panel is covering the bottom of the screen
+  useEffect(() => {
+    onPanelOpenChange?.(!collapsed);
+    return () => onPanelOpenChange?.(false);
+  }, [collapsed, onPanelOpenChange]);
 
   const activeCarId = profile.activeCarId;
   const activeBuild = builds[activeCarId] ?? createDefaultBuild(activeCarId);

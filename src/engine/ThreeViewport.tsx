@@ -17,6 +17,7 @@ import { buildPixarCar, CarRig, loadCarRigWithFallback } from './carBuilder3d';
 import { DriftPhysicsCar, pollUnifiedInput } from './driftPhysics';
 import { TandemAiCar } from './tandemAi';
 import { buildTrackWorld, TrackWorld } from './trackBuilder3d';
+import { createWorkshopEnvironment } from './workshopScene';
 
 export type WorkshopCameraPreset = 'overview' | 'action' | 'front' | 'wheels' | 'rear';
 export type RaceCameraMode = 'chase' | 'drift' | 'hood' | 'cinematic';
@@ -106,6 +107,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
   onToggleCamera,
   onTogglePause,
   onToggleAssist,
+  workshopPanelOpen = false,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [contextLost, setContextLost] = useState(false);
@@ -126,6 +128,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     onToggleCamera,
     onTogglePause,
     onToggleAssist,
+    workshopPanelOpen,
   });
   propsRef.current = {
     mode,
@@ -142,6 +145,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     onToggleCamera,
     onTogglePause,
     onToggleAssist,
+    workshopPanelOpen,
   };
 
   // Trigger rebuild flags inside WebGL effect (only structural visual props trigger car rebuild)
@@ -283,9 +287,9 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     const workshopGroup = new THREE.Group();
     const floorGeo = new THREE.CircleGeometry(38, 48);
     const floorMat = new THREE.MeshStandardMaterial({
-      color: 0x131a27,
-      roughness: 0.42,
-      metalness: 0.25,
+      color: 0xcfc6b4,
+      roughness: 0.9,
+      metalness: 0.02,
     });
     const floorMesh = new THREE.Mesh(floorGeo, floorMat);
     floorMesh.rotation.x = -Math.PI / 2;
@@ -295,9 +299,9 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
 
     const platformGeo = new THREE.CylinderGeometry(3.8, 4.15, 0.14, 48);
     const platformMat = new THREE.MeshStandardMaterial({
-      color: 0x1e293b,
-      roughness: 0.28,
-      metalness: 0.55,
+      color: 0xb9b2a3,
+      roughness: 0.6,
+      metalness: 0.15,
     });
     const platformMesh = new THREE.Mesh(platformGeo, platformMat);
     platformMesh.position.y = -0.07;
@@ -313,6 +317,8 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     ringMesh.rotation.x = -Math.PI / 2;
     ringMesh.position.y = 0.005;
     workshopGroup.add(ringMesh);
+    const workshopEnv = createWorkshopEnvironment();
+    workshopGroup.add(workshopEnv.group);
     scene.add(workshopGroup);
 
     // 6. OrbitControls for Workshop
@@ -474,14 +480,38 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
+    // Shift the projection upward while the Workshop panel is open so the car
+    // stays visible above it. Value is smoothed to animate open/close.
+    let viewShiftPx = 0;
+    const applyViewOffset = (force = false, dt = 0) => {
+      if (!container) return;
+      const w = Math.max(1, container.clientWidth);
+      const h = Math.max(1, container.clientHeight);
+      const cur = propsRef.current;
+      const panelPx = Math.min(h * 0.42, 360);
+      const wanted =
+        cur.mode === 'workshop' && cur.workshopPanelOpen ? panelPx / 2 : 0;
+      const next =
+        force || dt <= 0 ? wanted : THREE.MathUtils.damp(viewShiftPx, wanted, 8, dt);
+      if (!force && Math.abs(next - viewShiftPx) < 0.01) return;
+      viewShiftPx = Math.abs(next - wanted) < 0.5 ? wanted : next;
+      if (Math.abs(viewShiftPx) < 0.5) {
+        camera.clearViewOffset();
+      } else {
+        // Positive y offset moves the rendered window down, so the scene shifts up
+        camera.setViewOffset(w, h, 0, viewShiftPx, w, h);
+      }
+      camera.updateProjectionMatrix();
+    };
+
     // Resize observer
     const handleResize = () => {
       if (!container) return;
       const w = Math.max(1, container.clientWidth);
       const h = Math.max(1, container.clientHeight);
       camera.aspect = w / h;
-      camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      applyViewOffset(true);
     };
     window.addEventListener('resize', handleResize);
 
@@ -669,11 +699,11 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           workshopGroup.visible = true;
           studioLightsGroup.visible = true;
           controls.enabled = true;
-          scene.background = new THREE.Color(0x0d1320);
-          scene.fog = new THREE.FogExp2(0x0d1320, 0.012);
-          hemiLight.color.set(0xdbeafe);
-          hemiLight.groundColor.set(0x1e293b);
-          hemiLight.intensity = 0.78;
+          scene.background = new THREE.Color(0x9fd0f2);
+          scene.fog = new THREE.FogExp2(0xbfdcf0, 0.0042);
+          hemiLight.color.set(0xeaf4ff);
+          hemiLight.groundColor.set(0x9bb872);
+          hemiLight.intensity = 0.95;
           keyLight.color.set(0xfff4e0);
           keyLight.intensity = 1.72;
           keyLight.position.set(11, 16, 12);
@@ -777,6 +807,9 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           camera.lookAt(_smoothLookAt);
         }
       }
+
+      // Smoothly slide the view so the car clears the Workshop panel
+      applyViewOffset(false, dt);
 
       // Workshop Preset Camera Transition & Dynamic Animation
       if (current.mode === 'workshop') {
@@ -1403,7 +1436,7 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
   }, []);
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-[#0b0f17]">
+    <div className="relative w-full h-full overflow-hidden bg-black">
       <div ref={mountRef} className="w-full h-full" />
       {contextLost && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-950/95 text-center p-6 z-50">

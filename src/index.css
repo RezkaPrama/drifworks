@@ -39,3 +39,61 @@
 .custom-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(245, 158, 11, 0.65);
 }
+
+/* ---------- Bright daytime theme (Workshop hub only) ---------- */
+.theme-day {
+  --color-slate-950: #fbf6ea;
+  --color-slate-900: #ffffff;
+  --color-slate-800: #e6dfcf;
+  --color-slate-700: #d2c9b4;
+  --color-slate-600: #a89f8a;
+  --color-slate-500: #7a7364;
+  --color-slate-400: #5b5547;
+  --color-slate-300: #44403c;
+  --color-slate-200: #292524;
+  --color-slate-100: #1c1917;
+  --color-slate-50: #1c1917;
+  --color-white: #1c1917;
+  color: #1c1917;
+}
+
+.theme-day [class*="bg-[#0d121c]"],
+.theme-day [class*="bg-[#0b0f17]"] {
+  background-color: rgba(255, 252, 244, 0.93) !important;
+  backdrop-filter: blur(6px);
+}
+
+.theme-day .shadow-2xl,
+.theme-day [class*="bg-[#0d121c]"] {
+  box-shadow: 0 10px 30px rgba(80, 60, 20, 0.18);
+}
+
+/* Text sitting on amber/cyan buttons must stay dark */
+.theme-day .text-slate-950 {
+  color: #1c1917 !important;
+}
+
+/* Accent text needs more contrast on a light background */
+.theme-day .text-amber-400,
+.theme-day .text-amber-300 {
+  color: #b45309;
+}
+.theme-day .text-cyan-400,
+.theme-day .text-cyan-300 {
+  color: #0e7490;
+}
+.theme-day .text-emerald-400,
+.theme-day .text-emerald-300 {
+  color: #047857;
+}
+.theme-day .text-rose-200,
+.theme-day .text-rose-300 {
+  color: #9f1239;
+}
+
+.theme-day .custom-scroll::-webkit-scrollbar-track {
+  background: rgba(120, 100, 60, 0.12);
+}
+.theme-day .custom-scroll::-webkit-scrollbar-thumb {
+  background: rgba(120, 100, 60, 0.4);
+}

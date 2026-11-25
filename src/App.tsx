@@ -82,6 +82,7 @@ function GameApp() {
   const [telemetry, setTelemetry] = useState<TelemetryState>(INITIAL_TELEMETRY);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [raceSessionKey, setRaceSessionKey] = useState(0);
+  const [workshopPanelOpen, setWorkshopPanelOpen] = useState(false);
 
   const [touchControls, setTouchControls] = useState({
     throttle: false,
@@ -155,7 +156,11 @@ function GameApp() {
   );
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-[#0b0f17]">
+    <div
+      className={`relative w-screen h-screen overflow-hidden bg-[#0b0f17] ${
+        mode === 'workshop' ? 'theme-day' : ''
+      }`}
+    >
       {/* Persistent 3D WebGL Canvas */}
       <ThreeViewport
         mode={mode}
@@ -165,6 +170,7 @@ function GameApp() {
         trackId={selectedTrackId}
         sessionKey={raceSessionKey}
         workshopPreset={workshopPreset}
+        workshopPanelOpen={workshopPanelOpen}
         raceCameraMode={raceCameraMode}
         isPaused={isPaused || Boolean(runResult)}
         touchControls={touchControls}
@@ -215,6 +221,7 @@ function GameApp() {
                 onApplyVisual={store.applyVisualPart}
                 onUpdateTuning={store.updateTuning}
                 onOpenShop={() => setActiveTab('shop')}
+                onPanelOpenChange={setWorkshopPanelOpen}
               />
             </>
           )}
