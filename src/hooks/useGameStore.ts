@@ -64,16 +64,16 @@ function normalizeCarId(rawId: string | undefined): CarId {
 }
 
 const DEFAULT_STARTER_DRIFT_COINS = 2500;
-// TODO(publish): Ubah ke null sebelum publish untuk mengembalikan Drift Coins default (2.500 DC)
-// on publish
-const TEMP_DEV_FULL_COINS: number | null = null;
-// TODO(publish): Ubah ke false sebelum publish untuk mengembalikan sistem kunci track berdasarkan REP
-export const TEMP_DEV_UNLOCK_ALL_TRACKS = false;
-
-// // local
-// const TEMP_DEV_FULL_COINS: number | 999999999 = 999999999;
+// // TODO(publish): Ubah ke null sebelum publish untuk mengembalikan Drift Coins default (2.500 DC)
+// // on publish
+// const TEMP_DEV_FULL_COINS: number | null = null;
 // // TODO(publish): Ubah ke false sebelum publish untuk mengembalikan sistem kunci track berdasarkan REP
-// export const TEMP_DEV_UNLOCK_ALL_TRACKS = true;
+// export const TEMP_DEV_UNLOCK_ALL_TRACKS = false;
+
+// local
+const TEMP_DEV_FULL_COINS: number | 999999999 = 999999999;
+// TODO(publish): Ubah ke false sebelum publish untuk mengembalikan sistem kunci track berdasarkan REP
+export const TEMP_DEV_UNLOCK_ALL_TRACKS = true;
 
 function normalizeProfile(raw: UserProfile): UserProfile {
   const mappedOwned = Array.from(

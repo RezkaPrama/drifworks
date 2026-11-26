@@ -60,6 +60,9 @@ interface ThreeViewportProps {
 const _camTargetPos = new THREE.Vector3();
 const _camLookAt = new THREE.Vector3();
 const _smoothLookAt = new THREE.Vector3();
+// Sudut kamera mode drift yang dihaluskan (agar background tidak menyapu cepat saat mobil slide)
+let _driftCamHeading = 0;
+let _driftCamReady = false;
 const _dummy = new THREE.Object3D();
 const _smokeColor = new THREE.Color();
 
@@ -1235,10 +1238,26 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           _smoothLookAt.lerp(_camLookAt, 0.25);
         } else {
           // 'chase' or 'drift' (drift swings cleanly toward velocity vector like AI tandem replay shots!)
-          const camHeading =
-            current.raceCameraMode === 'drift'
-              ? physics.heading + Math.sin(velAngle - physics.heading) * 0.74
-              : physics.heading;
+          let camHeading = physics.heading;
+          if (current.raceCameraMode === 'drift') {
+            // Target: hampir searah arah gerak (bukan arah hidung mobil), sehingga saat drift
+            // mobil tampak miring dari samping dan background tidak menyapu cepat.
+            const slipOffset = Math.atan2(Math.sin(velAngle - physics.heading), Math.cos(velAngle - physics.heading));
+            const targetHeading = physics.heading + slipOffset * 0.9;
+            if (!_driftCamReady) {
+              _driftCamHeading = targetHeading;
+              _driftCamReady = true;
+            }
+            // Sudut dihaluskan dengan laju rendah agar putaran kamera lambat dan tenang
+            const diff = Math.atan2(
+              Math.sin(targetHeading - _driftCamHeading),
+              Math.cos(targetHeading - _driftCamHeading),
+            );
+            _driftCamHeading += THREE.MathUtils.damp(0, diff, 1.7, dt);
+            camHeading = _driftCamHeading;
+          } else {
+            _driftCamReady = false;
+          }
           const cSin = Math.sin(camHeading);
           const cCos = Math.cos(camHeading);
           const dist = current.raceCameraMode === 'drift' ? 8.3 : 7.4;

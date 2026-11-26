@@ -257,7 +257,12 @@ export class DriftPhysicsCar {
     // Steer: tiap tekan menggeser 1 level. Saat drift kanan di level -5, tekan kiri
     // hanya menurunkan ke -4, -3, ... sampai 0 (lurus), baru lanjut ke sisi kiri.
     const steerTarget = Math.round(THREE.MathUtils.clamp(rawInput.steer, -1, 1) * 10);
-    const steerAdv = this.advanceLevel(this.steerLevel, steerTarget, this.steerLevelTimer, clampedDt, 0.06, 0.05);
+    // Saat drifting dan input dilepas (target 0 / kurang dari level saat ini, sisi sama), indikator steer
+    // kembali ke 0 lebih lambat. Counter-steer ke sisi berlawanan dan kondisi grip tetap cepat.
+    const releasingWhileDrifting =
+      this.isDrifting && this.steerLevel * steerTarget >= 0 && Math.abs(steerTarget) < Math.abs(this.steerLevel);
+    const steerIntervalDown = releasingWhileDrifting ? 0.9 : 0.05;
+    const steerAdv = this.advanceLevel(this.steerLevel, steerTarget, this.steerLevelTimer, clampedDt, 0.06, steerIntervalDown);
     this.steerLevel = steerAdv.level;
     this.steerLevelTimer = steerAdv.timer;
 
