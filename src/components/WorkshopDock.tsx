@@ -240,6 +240,8 @@ export const WorkshopDock: React.FC<WorkshopDockProps> = ({
                   {filteredCars.map((car) => {
                     const owned = profile.ownedCars.includes(car.id);
                     const active = profile.activeCarId === car.id;
+                    // Sementara: kelas Am / Semi-Pro dan Pro belum bisa dibeli (Coming Soon)
+                    const comingSoon = car.carClass !== 'Rookie' && !owned;
                     const classTextColor =
                       car.carClass === 'Pro'
                         ? 'text-cyan-400'
@@ -295,6 +297,10 @@ export const WorkshopDock: React.FC<WorkshopDockProps> = ({
                             >
                               Pilih Mobil
                             </button>
+                          ) : comingSoon ? (
+                            <div className="w-full py-1.5 rounded-md bg-slate-800 border border-slate-700 text-center text-[11px] font-bold text-slate-400 cursor-not-allowed">
+                              Coming Soon
+                            </div>
                           ) : (
                             <div className="flex gap-1.5">
                               <button

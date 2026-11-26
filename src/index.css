@@ -73,6 +73,14 @@
   color: #1c1917 !important;
 }
 
+/* Tombol putih (mis. "Masuk Google"): slate-100 dibalik jadi gelap di tema terang, paksa tetap putih */
+.theme-day .bg-slate-100,
+.theme-day .bg-slate-100:hover {
+  background-color: #ffffff !important;
+  border: 1px solid #b0b5bd;
+  box-shadow: 0 1px 3px rgba(30, 35, 45, 0.18);
+}
+
 /* Accent text needs more contrast on a light background */
 .theme-day .text-amber-400,
 .theme-day .text-amber-300 {

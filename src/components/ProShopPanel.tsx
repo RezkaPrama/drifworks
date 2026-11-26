@@ -135,13 +135,19 @@ export const ProShopPanel: React.FC<ProShopPanelProps> = ({
                     </div>
                     <div className="text-[11px] text-slate-400">{pkg.priceUsd} USD</div>
                   </div>
-                  <button
-                    onClick={() => setCheckoutPkg(pkg)}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs whitespace-nowrap cursor-pointer"
-                  >
-                    <ShoppingBag className="w-3.5 h-3.5" />
-                    Beli Sekarang
-                  </button>
+                  {pkg.unlockedCarId ? (
+                    <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-400 font-semibold text-xs whitespace-nowrap cursor-not-allowed">
+                      Coming Soon
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setCheckoutPkg(pkg)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs whitespace-nowrap cursor-pointer"
+                    >
+                      <ShoppingBag className="w-3.5 h-3.5" />
+                      Beli Sekarang
+                    </button>
+                  )}
                 </div>
               </div>
             );
