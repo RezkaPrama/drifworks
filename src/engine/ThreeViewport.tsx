@@ -628,6 +628,8 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
         const dmgVal = current.mode === 'race' ? physics.bodyIntegrity : current.build.bodyIntegrity;
         carRig.updateDamageVisual(dmgVal);
         lastAppliedDamage = dmgVal;
+        // Jika mobil punya GLB, sembunyikan mobil prosedural sementara agar tidak sempat terlihat (flash) sebelum GLB siap
+        carRig.root.visible = !CAR_CATALOG.find((c) => c.id === current.carId)?.modelUrl;
         scene.add(carRig.root);
         _smokeColor.set(current.build.smokeColorHex);
         smokeMat.color.copy(_smokeColor);

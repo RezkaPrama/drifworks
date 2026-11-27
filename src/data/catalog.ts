@@ -31,6 +31,7 @@ export const CAR_CATALOG: CarCatalogItem[] = [
     creditPrice: 0,
     defaultPaint: '#254b8c',
     thumbnailUrl: '/assets/aistudio/3D_illustration_of_pick-up_truck_05a066b1_aeef393a.jpg',
+    modelUrl: '/model/suzuki_carry_pickup.glb',
     description:
       'Favorit latihan pemula di Indonesia. Bobot bak belakang yang sangat ringan membuat ban belakang mudah kehilangan traksi untuk belajar donut & figure-8.',
   },
@@ -51,6 +52,7 @@ export const CAR_CATALOG: CarCatalogItem[] = [
     creditPrice: 45,
     defaultPaint: '#2b4c7e',
     thumbnailUrl: '/assets/aistudio/Toyota_Kijang_Super_illustration_866e1ef2_f019d793.jpg',
+    hidden: true,
     description:
       'MPV klasik ikonik dengan strip samping merah-putih. Suku cadang melimpah dan mudah diajak melatih transisi dasar serta kontrol sudut.',
   },
@@ -71,6 +73,8 @@ export const CAR_CATALOG: CarCatalogItem[] = [
     creditPrice: 60,
     defaultPaint: '#2d5a3c',
     thumbnailUrl: '/assets/aistudio/Toyota_Kijang_Kapsul_3D_illustra__6a749b4c_3b36f5a8.jpg',
+    modelUrl: '/model/kijang_kapsul.glb',
+    modelYawDeg: 180,
     description:
       'Versi kapsul dengan over-fender two-tone dan wheel-track lebar. Stabil saat latihan donut, figure-8, hingga entry tikungan panjang.',
   },
@@ -91,6 +95,8 @@ export const CAR_CATALOG: CarCatalogItem[] = [
     creditPrice: 75,
     defaultPaint: '#1d63dc',
     thumbnailUrl: '/assets/aistudio/Low-poly_3D_car_illustration_2ed7b750_3049de80.jpg',
+    modelUrl: '/model/toyota_corrolla_dx.glb',
+    modelYawDeg: 180,
     description:
       'Bobot di bawah 1 ton dengan dimensi kompak. Sangat responsif dan mudah dikendalikan untuk membaca sudut (angle) drift.',
   },
@@ -111,6 +117,7 @@ export const CAR_CATALOG: CarCatalogItem[] = [
     creditPrice: 110,
     defaultPaint: '#1e3d6b',
     thumbnailUrl: '/assets/aistudio/Low-poly_BMW_E36_illustration_fe08285e_21aa3904.jpg',
+    modelUrl: '/model/bmw_e36.glb',
     description:
       'Distribusi bobot mendekati 50:50 dengan sasis kaku dan presisi. Siap di-upgrade ke mesin stroker M52/M54 atau swap 1JZ/2JZ saat naik kelas.',
   },

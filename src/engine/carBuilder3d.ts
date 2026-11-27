@@ -2215,6 +2215,18 @@ export async function loadCarRigWithFallback(
     box.getSize(size);
     box.getCenter(center);
 
+    // Jika sumbu terpanjang model ada di X (bukan Z), putar 90Â° agar panjang mobil sejajar sumbu Z game
+    // Putaran tambahan per mobil (modelYawDeg di katalog) untuk mengoreksi arah hadap model
+    const autoYaw = size.x > size.z * 1.05 ? Math.PI / 2 : 0;
+    const extraYaw = THREE.MathUtils.degToRad(carMeta.modelYawDeg ?? 0);
+    if (autoYaw !== 0 || extraYaw !== 0) {
+      modelRoot.rotation.y = autoYaw + extraYaw;
+      modelRoot.updateMatrixWorld(true);
+      box.setFromObject(modelRoot);
+      box.getSize(size);
+      box.getCenter(center);
+    }
+
     const targetLength = spec.frontZ - spec.rearZ;
     const scaleFactor = size.z > 0.01 ? targetLength / size.z : 1;
     modelRoot.scale.setScalar(scaleFactor);
@@ -2247,8 +2259,12 @@ export async function loadCarRigWithFallback(
     });
 
     const root = new THREE.Group();
-    const bodyGroup = (modelRoot.getObjectByName('bodyGroup') as THREE.Group | undefined) ?? modelRoot;
-    root.add(modelRoot);
+    // bodyGroup dipisah dari modelRoot: fisika menimpa bodyGroup.position.y,
+    // sehingga offset tanah (modelRoot.position.y) harus berada di node anak agar tidak hilang.
+    const bodyGroup = new THREE.Group();
+    bodyGroup.name = 'bodyGroup';
+    bodyGroup.add(modelRoot);
+    root.add(bodyGroup);
 
     const findNode = (names: string[]) => {
       for (const n of names) {

@@ -65,10 +65,11 @@ export const WorkshopDock: React.FC<WorkshopDockProps> = ({
 
   const activeCarId = profile.activeCarId;
   const activeBuild = builds[activeCarId] ?? createDefaultBuild(activeCarId);
+  const visibleCars = CAR_CATALOG.filter((c) => !c.hidden);
   const filteredCars =
     classFilter === 'Semua'
-      ? CAR_CATALOG
-      : CAR_CATALOG.filter((c) => c.carClass === classFilter);
+      ? visibleCars
+      : visibleCars.filter((c) => c.carClass === classFilter);
 
   const tabs: { id: WorkshopSubTab; label: string }[] = [
     { id: 'mobil', label: 'Garasi Mobil' },
@@ -232,7 +233,7 @@ export const WorkshopDock: React.FC<WorkshopDockProps> = ({
                     ))}
                   </div>
                   <span className="text-xs text-slate-400">
-                    Menampilkan {filteredCars.length} dari {CAR_CATALOG.length} mobil drift
+                    Menampilkan {filteredCars.length} dari {visibleCars.length} mobil drift
                   </span>
                 </div>
 

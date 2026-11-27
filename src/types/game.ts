@@ -63,6 +63,10 @@ export interface CarCatalogItem {
   defaultPaint: string;
   thumbnailUrl?: string;
   modelUrl?: string;
+  /** Putaran tambahan model GLB pada sumbu Y (derajat) untuk mengoreksi arah hadap. Contoh: 180 jika mobil terbalik. */
+  modelYawDeg?: number;
+  /** Jika true, mobil disembunyikan dari daftar garasi (data tetap ada untuk kompatibilitas save) */
+  hidden?: boolean;
   description: string;
 }
 
