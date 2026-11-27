@@ -64,16 +64,16 @@ function normalizeCarId(rawId: string | undefined): CarId {
 }
 
 const DEFAULT_STARTER_DRIFT_COINS = 2500;
-// // TODO(publish): Ubah ke null sebelum publish untuk mengembalikan Drift Coins default (2.500 DC)
-// // on publish
-// const TEMP_DEV_FULL_COINS: number | null = null;
-// // TODO(publish): Ubah ke false sebelum publish untuk mengembalikan sistem kunci track berdasarkan REP
-// export const TEMP_DEV_UNLOCK_ALL_TRACKS = false;
+// TODO(publish): Ubah ke null sebelum publish untuk mengembalikan Drift Coins default (2.500 DC)
+// on publish
+const TEMP_DEV_FULL_COINS: number | null = null;
+// TODO(publish): Ubah ke false sebelum publish untuk mengembalikan sistem kunci track berdasarkan REP
+export const TEMP_DEV_UNLOCK_ALL_TRACKS = false;
 
 // local
-const TEMP_DEV_FULL_COINS: number | 999999999 = 999999999;
-// TODO(publish): Ubah ke false sebelum publish untuk mengembalikan sistem kunci track berdasarkan REP
-export const TEMP_DEV_UNLOCK_ALL_TRACKS = true;
+// const TEMP_DEV_FULL_COINS: number | 999999999 = 999999999;
+// // TODO(publish): Ubah ke false sebelum publish untuk mengembalikan sistem kunci track berdasarkan REP
+// export const TEMP_DEV_UNLOCK_ALL_TRACKS = true;
 
 function normalizeProfile(raw: UserProfile): UserProfile {
   const mappedOwned = Array.from(
@@ -201,6 +201,8 @@ export function useGameStore() {
     sakura_touge: [],
     neon_docks: [],
     practice_yard: [],
+    rally_pine_dry: [],
+    rally_valley_mud: [],
   });
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false);
   const [toast, setToast] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
