@@ -311,6 +311,11 @@ export class DriftPhysicsCar {
     let lateralVel = this.velocity.x * rightX + this.velocity.z * rightZ;
     const totalSpeed = Math.hypot(forwardVel, lateralVel);
     const currentSpeedKmh = totalSpeed * 3.6;
+    // Kecepatan badan sebelum heading berputar (dipakai untuk menjaga momentum samping saat drift)
+    const bodyFwd0 = forwardVel;
+    const bodyLat0 = lateralVel;
+    const worldVx0 = this.velocity.x;
+    const worldVz0 = this.velocity.z;
 
     if (this.clutchKickCooldown > 0) this.clutchKickCooldown -= clampedDt;
     if (this.clutchRpmFlare > 0) this.clutchRpmFlare = Math.max(0, this.clutchRpmFlare - clampedDt * 2900);
@@ -492,7 +497,7 @@ export class DriftPhysicsCar {
       // Adding more gas spins the rear tires faster and sustains angle rather than rocketing forward.
       const angleLossFactor = THREE.MathUtils.clamp(absSlipRad / 0.85, 0, 1);
       const burnoutBite =
-        (0.21 + build.tireTier * 0.065) *
+        (0.3 + build.tireTier * 0.065) *
         tireGripFactor *
         (1 - angleLossFactor * 0.34);
       // Gas dikocok (tekan-lepas): ban belakang sempat menggigit lagi -> bite naik, batas kecepatan drift longgar
@@ -505,7 +510,7 @@ export class DriftPhysicsCar {
 
       // Gentle drift flow ceiling (~62-84 km/h depending on tires/boost) so drifting mirrors Tandem AI pace
       const driftFlowCapMs =
-        (18.5 + stats.powerFactor * 4.2 + build.tireTier * 1.4) *
+        (20.5 + stats.powerFactor * 4.2 + build.tireTier * 1.4) *
         (this.isBoosting ? 1.24 : 1.0) *
         (1 + pump * 0.28);
       forwardVel += pump * 3.2 * clampedDt;
@@ -528,7 +533,7 @@ export class DriftPhysicsCar {
 
     // Sideways scrub drag increases naturally with slip angle & rear burnout so drift speed stays controllable
     const driftScrubDrag =
-      slideLoose > 0.3 ? 0.56 + absSlipRad * 0.48 + slideLoose * 0.24 : 0.48;
+      slideLoose > 0.3 ? 0.4 + absSlipRad * 0.3 + slideLoose * 0.16 : 0.48;
     forwardVel *= Math.exp(-(inSpinOut ? 1.7 : driftScrubDrag) * clampedDt);
 
     // --- 3. PROGRESSIVE TRANSITION LEVELS, COUNTER-STEER & OVER-ROTATION SPIN-OUT ---
@@ -652,7 +657,7 @@ export class DriftPhysicsCar {
       const throttleKick =
         input.throttle *
         driftDir *
-        (0.46 + wheelspinPower * 0.48 + (this.isBoosting ? 0.32 : 0)) *
+        (0.6 + wheelspinPower * 0.48 + (this.isBoosting ? 0.32 : 0)) *
         slideLoose *
         pushBoost;
       targetAngVel += throttleKick;
@@ -745,6 +750,20 @@ export class DriftPhysicsCar {
 
     this.heading += this.angularVelocity * clampedDt;
 
+    // Momentum samping: saat ban belakang lepas, vektor gerak dunia tidak ikut berputar penuh bersama
+    // hidung mobil, sehingga bagian belakang terlempar (slip angle terbentuk) dan mobil benar-benar ngeslide.
+    if (!inSpinOut) {
+      const hSin = Math.sin(this.heading);
+      const hCos = Math.cos(this.heading);
+      const projFwd = worldVx0 * hSin + worldVz0 * hCos;
+      const projLat = worldVx0 * hCos - worldVz0 * hSin;
+      // Efek penuh sampai sudut sedang (~20 deg), lalu mengecil agar sudut dalam tidak makin melebar/melintir
+      const angleTaper = THREE.MathUtils.clamp(1 - (absSlipRad - 0.35) / 0.6, 0.25, 1);
+      const slideCarry = THREE.MathUtils.clamp(slideLoose * 0.8, 0, 0.8) * angleTaper;
+      forwardVel += (projFwd - bodyFwd0) * slideCarry;
+      lateralVel += (projLat - bodyLat0) * slideCarry;
+    }
+
     // --- 4. LATERAL SLIDE & BOUNDARY / WALL HIT DAMAGE ---
     const gripDecay = stats.lateralGrip * 4.95 * tireGripFactor;
     const transitionCarryScale =
@@ -752,7 +771,7 @@ export class DriftPhysicsCar {
         ? 0.76
         : 1.0;
     const slideDecay =
-      (0.58 + (1 - Math.min(0.85, stats.driftSlipFactor * 0.65)) * 0.66) *
+      (0.36 + (1 - Math.min(0.85, stats.driftSlipFactor * 0.65)) * 0.42) *
       (input.handbrake ? 0.5 : 1.0) *
       transitionCarryScale;
     const lateralGripDecay =
