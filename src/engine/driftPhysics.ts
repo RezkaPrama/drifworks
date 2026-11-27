@@ -59,6 +59,8 @@ export class DriftPhysicsCar {
   // Transmisi: AUTO mengikuti kecepatan, MANUAL diatur pemain (X naik gigi, Z turun gigi, T ganti mode)
   public transmissionMode: 'AUTO' | 'MANUAL' = 'AUTO';
   private manualGear = 1;
+  private autoShiftTimer = 0; // jeda ganti gigi AUTO (tenaga terputus sebentar)
+  private autoShiftCooldown = 0; // cegah ganti gigi bolak-balik
   private prevShiftUp = false;
   private prevShiftDown = false;
   private prevToggleTransmission = false;
@@ -476,6 +478,9 @@ export class DriftPhysicsCar {
       const lugPenalty = gearPos < 0 ? Math.max(0.45, 1 + gearPos * 0.55) : 1.0;
       const limiterPenalty = gearPos > 1 ? Math.max(0.15, 1 - (gearPos - 1) * 1.4) : 1.0;
       gearAccelScale = baseScale * lugPenalty * limiterPenalty;
+    } else if (this.autoShiftTimer > 0) {
+      // AUTO: tenaga terputus sebentar saat ganti gigi
+      gearAccelScale = 0.35;
     }
     const driveAccel = (19 + stats.powerFactor * 13.0) * boostMult * gearAccelScale;
 
@@ -881,9 +886,44 @@ export class DriftPhysicsCar {
       // Posisi kecepatan di dalam rentang gigi terpilih: terlalu rendah = RPM jatuh, terlalu tinggi = mentok limiter
       gearFrac = THREE.MathUtils.clamp(speedNorm * 5 - (this.manualGear - 1), 0, 1);
     } else {
-      const gearFloat = 1 + speedNorm * 4.5;
-      this.gear = Math.min(5, Math.max(1, Math.floor(gearFloat)));
-      gearFrac = gearFloat - Math.floor(gearFloat);
+      // AUTO berbasis RPM + gas: naik gigi saat RPM mendekati limiter, turun gigi saat gas dilepas / RPM jatuh.
+      // Ada jeda ganti gigi (tenaga terputus sebentar) dan cooldown agar tidak bolak-balik.
+      const autoTopKmh = Math.min(stats.maxSpeedKmh, 150);
+      const gearSpanKmh = Math.max(20, autoTopKmh / 5);
+      const ratioIn = (g: number) =>
+        THREE.MathUtils.clamp(this.speedKmh / (gearSpanKmh * g * 1.1), 0, 1.4);
+
+      if (this.autoShiftTimer > 0) this.autoShiftTimer -= clampedDt;
+      if (this.autoShiftCooldown > 0) this.autoShiftCooldown -= clampedDt;
+
+      if (this.autoShiftTimer <= 0 && this.autoShiftCooldown <= 0) {
+        const curRatio = ratioIn(this.gear);
+        const rpmFrac = this.rpm / Math.max(1, this.maxRpm);
+        let shiftDir = 0;
+        if (this.gear < 5) {
+          const nextRatio = ratioIn(this.gear + 1);
+          const geared = curRatio > 0.95;
+          const flareFull = rpmFrac > 0.95 && input.throttle > 0.5 && nextRatio >= 0.5;
+          if (geared || flareFull) shiftDir = 1;
+        }
+        if (shiftDir === 0 && this.gear > 1) {
+          const prevRatio = ratioIn(this.gear - 1);
+          const liftOff = input.throttle < 0.1 && prevRatio < 1.0 && curRatio < 0.85;
+          const lowRpm = curRatio < 0.38 && prevRatio < 0.92;
+          if (liftOff || lowRpm) shiftDir = -1;
+        }
+        if (shiftDir !== 0) {
+          this.gear += shiftDir;
+          this.autoShiftTimer = 0.22;
+          this.autoShiftCooldown = 0.55;
+          if (!this.activeZoneBanner) {
+            this.activeZoneBanner = shiftDir > 0 ? 'UPSHIFT' : 'DOWNSHIFT';
+            this.activeZoneBannerTimer = 0.5;
+          }
+        }
+      }
+      // Saat ganti gigi RPM turun sedikit supaya terasa
+      gearFrac = Math.max(0, ratioIn(this.gear) - (this.autoShiftTimer > 0 ? 0.14 : 0));
     }
     const wheelspinFlare = slideLoose * input.throttle * 1950 + this.clutchRpmFlare;
     const targetRpm =
@@ -1102,6 +1142,9 @@ export function pollUnifiedInput(
     handbrake: boolean;
     clutchKick: boolean;
     boost: boolean;
+    shiftUp: boolean;
+    shiftDown: boolean;
+    toggleTransmission: boolean;
   },
 ): InputState {
   let throttle = keys['KeyW'] || keys['ArrowUp'] || touchInput.throttle ? 1 : 0;
@@ -1146,9 +1189,9 @@ export function pollUnifiedInput(
     handbrake,
     clutchKick,
     boost,
-    shiftUp: Boolean(keys['KeyX']),
-    shiftDown: Boolean(keys['KeyZ']),
-    toggleTransmission: Boolean(keys['KeyT']),
+    shiftUp: Boolean(keys['KeyX'] || touchInput.shiftUp),
+    shiftDown: Boolean(keys['KeyZ'] || touchInput.shiftDown),
+    toggleTransmission: Boolean(keys['KeyT'] || touchInput.toggleTransmission),
     gamepadConnected,
     gamepadName,
   };

@@ -41,6 +41,9 @@ interface ThreeViewportProps {
     handbrake: boolean;
     clutchKick: boolean;
     boost: boolean;
+    shiftUp: boolean;
+    shiftDown: boolean;
+    toggleTransmission: boolean;
   };
   onTelemetry: (t: TelemetryState) => void;
   onRaceFinish: (summary: {

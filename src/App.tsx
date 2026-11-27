@@ -92,6 +92,9 @@ function GameApp() {
     handbrake: false,
     clutchKick: false,
     boost: false,
+    shiftUp: false,
+    shiftDown: false,
+    toggleTransmission: false,
   });
 
   const activeBuild =
@@ -147,7 +150,17 @@ function GameApp() {
 
   const handleTouchChange = useCallback(
     (
-      key: 'throttle' | 'brake' | 'left' | 'right' | 'handbrake' | 'clutchKick' | 'boost',
+      key:
+        | 'throttle'
+        | 'brake'
+        | 'left'
+        | 'right'
+        | 'handbrake'
+        | 'clutchKick'
+        | 'boost'
+        | 'shiftUp'
+        | 'shiftDown'
+        | 'toggleTransmission',
       active: boolean,
     ) => {
       setTouchControls((prev) => ({ ...prev, [key]: active }));

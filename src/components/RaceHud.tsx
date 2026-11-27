@@ -29,7 +29,17 @@ interface RaceHudProps {
   onToggleAssist: () => void;
   onRestart: () => void;
   onTouchChange: (
-    key: 'throttle' | 'brake' | 'left' | 'right' | 'handbrake' | 'clutchKick' | 'boost',
+    key:
+      | 'throttle'
+      | 'brake'
+      | 'left'
+      | 'right'
+      | 'handbrake'
+      | 'clutchKick'
+      | 'boost'
+      | 'shiftUp'
+      | 'shiftDown'
+      | 'toggleTransmission',
     active: boolean,
   ) => void;
 }
@@ -134,24 +144,24 @@ export const RaceHud: React.FC<RaceHudProps> = ({
         : 'text-cyan-300';
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-30 flex flex-col justify-between p-4 sm:p-6 select-none">
+    <div className="pointer-events-none fixed inset-0 z-30 flex flex-col justify-between p-2 sm:p-4 lg:p-6 select-none">
       {/* Top Row: Controls, Live Drift Score / Tandem Judge, & Track Minimap + Radar */}
       <div className="flex items-start justify-between gap-4">
         {/* Top-Left Compact Actions */}
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2 max-w-sm">
+        <div className="pointer-events-auto flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-1.5 sm:gap-2 sm:max-w-sm">
           <button
             onClick={onTogglePause}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0d121c]/92 border border-slate-800 hover:border-slate-700 text-xs font-semibold text-white cursor-pointer"
           >
             <Pause className="w-3.5 h-3.5" />
-            Jeda
+            <span className="hidden sm:inline">Jeda</span>
           </button>
           <button
             onClick={onCycleCamera}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#0d121c]/92 border border-slate-800 hover:border-slate-700 text-xs font-medium text-slate-200 cursor-pointer"
           >
             <Camera className="w-3.5 h-3.5 text-amber-400" />
-            {camLabels[cameraMode]} (C)
+            <span className="hidden sm:inline">{camLabels[cameraMode]} (C)</span>
           </button>
           <button
             onClick={onToggleAssist}
@@ -162,7 +172,8 @@ export const RaceHud: React.FC<RaceHudProps> = ({
             }`}
           >
             <ShieldCheck className="w-3.5 h-3.5" />
-            Assist: {telemetry.autoCounterSteer ? 'ON' : 'OFF'} (Q)
+            <span className="sm:hidden text-[10px]">{telemetry.autoCounterSteer ? 'ON' : 'OFF'}</span>
+            <span className="hidden sm:inline">Assist: {telemetry.autoCounterSteer ? 'ON' : 'OFF'} (Q)</span>
           </button>
           <button
             onClick={onToggleMute}
@@ -183,7 +194,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
 
         {/* Top-Center: Score, Tandem Judge Bar, Live Drift Chain & Penalties */}
         <div className="flex flex-col items-center text-center">
-          <div className="bg-[#0d121c]/92 border border-slate-800 rounded-xl px-6 py-2.5 min-w-[260px]">
+          <div className="bg-[#0d121c]/92 border border-slate-800 rounded-xl px-3 sm:px-6 py-2 sm:py-2.5 min-w-[190px] sm:min-w-[260px]">
             <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400">
               {telemetry.gameMode === 'tandem' ? (
                 <span className="inline-flex items-center gap-1 font-bold text-cyan-400">
@@ -267,7 +278,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
 
           {(telemetry.liveDriftScore > 0 || telemetry.oversteerRisk >= 0.45) && (
             <div
-              className={`mt-2 rounded-lg px-4 py-1.5 min-w-[248px] space-y-1 border ${
+              className={`mt-2 rounded-lg px-3 sm:px-4 py-1.5 min-w-[190px] sm:min-w-[248px] max-w-[62vw] sm:max-w-none space-y-1 border ${
                 telemetry.oversteerRisk >= 0.45 || telemetry.straightenRisk >= 0.35
                   ? 'bg-rose-950/92 border-rose-500'
                   : telemetry.transitionProgress >= 0.18
@@ -346,6 +357,29 @@ export const RaceHud: React.FC<RaceHudProps> = ({
               {telemetry.penaltyBanner}
             </div>
           )}
+        </div>
+
+        {/* Mobile compact readout (speedometer hidden on small screens) */}
+        <div className="sm:hidden bg-[#0d121c]/92 border border-slate-800 rounded-xl px-2.5 py-1.5 min-w-[92px] text-right space-y-1">
+          <div className="font-mono-tabular text-xl font-bold text-white leading-none">
+            {telemetry.speedKmh}
+            <span className="text-[9px] text-slate-400 ml-0.5">km/h</span>
+          </div>
+          <div className="text-[10px] font-bold text-amber-400">
+            G{telemetry.gear} Â· {telemetry.transmissionMode === 'MANUAL' ? 'MANUAL' : 'AUTO'}
+          </div>
+          <div className="h-1.5 w-full bg-slate-800 rounded-sm overflow-hidden">
+            <div
+              className={`h-full transition-all duration-75 ${rpmRatio > 0.85 ? 'bg-rose-500' : 'bg-amber-400'}`}
+              style={{ width: `${Math.round(rpmRatio * 100)}%` }}
+            />
+          </div>
+          <div className="h-1 w-full bg-slate-800 rounded-sm overflow-hidden">
+            <div
+              className="h-full bg-cyan-400 transition-all duration-75"
+              style={{ width: `${Math.round(telemetry.nitro * 100)}%` }}
+            />
+          </div>
         </div>
 
         {/* Top-Right: Minimap & Tandem Proximity Radar */}
@@ -452,16 +486,53 @@ export const RaceHud: React.FC<RaceHudProps> = ({
             <span className="text-slate-500 mx-1">·</span>{' '}
             <span className="font-mono-tabular text-white font-semibold">R</span> Reset
           </div>
+          <div>
+            <span className="font-mono-tabular text-fuchsia-400 font-semibold">T</span> Auto/Manual
+            <span className="text-slate-500 mx-1">Â·</span>{' '}
+            <span className="font-mono-tabular text-fuchsia-400 font-semibold">Z</span> Gigi Turun
+            <span className="text-slate-500 mx-1">Â·</span>{' '}
+            <span className="font-mono-tabular text-fuchsia-400 font-semibold">X</span> Gigi Naik
+          </div>
         </div>
 
         {/* Touch controls on small screens */}
-        <div className="pointer-events-auto flex lg:hidden items-end justify-between w-full gap-2">
+        <div className="pointer-events-auto touch-none flex lg:hidden items-end justify-between w-full gap-2">
           <div className="flex gap-1.5">
+            <div className="flex flex-col gap-1.5">
+              <button
+                onPointerDown={() => onTouchChange('toggleTransmission', true)}
+                onPointerUp={() => onTouchChange('toggleTransmission', false)}
+                onPointerLeave={() => onTouchChange('toggleTransmission', false)}
+                className="px-2 h-7 rounded-lg bg-[#0d121c]/90 border border-slate-700 text-[10px] font-bold text-white active:bg-cyan-500 active:text-slate-950"
+              >
+                {telemetry.transmissionMode === 'MANUAL' ? 'MANUAL' : 'AUTO'}
+              </button>
+              {telemetry.transmissionMode === 'MANUAL' && (
+                <div className="flex gap-1.5">
+                  <button
+                    onPointerDown={() => onTouchChange('shiftDown', true)}
+                    onPointerUp={() => onTouchChange('shiftDown', false)}
+                    onPointerLeave={() => onTouchChange('shiftDown', false)}
+                    className="w-10 h-10 rounded-lg bg-slate-700/90 text-white font-bold text-[11px] active:bg-amber-500 active:text-slate-950"
+                  >
+                    G-
+                  </button>
+                  <button
+                    onPointerDown={() => onTouchChange('shiftUp', true)}
+                    onPointerUp={() => onTouchChange('shiftUp', false)}
+                    onPointerLeave={() => onTouchChange('shiftUp', false)}
+                    className="w-10 h-10 rounded-lg bg-slate-700/90 text-white font-bold text-[11px] active:bg-amber-500 active:text-slate-950"
+                  >
+                    G+
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onPointerDown={() => onTouchChange('left', true)}
               onPointerUp={() => onTouchChange('left', false)}
               onPointerLeave={() => onTouchChange('left', false)}
-              className="w-13 h-14 rounded-xl bg-[#0d121c]/90 border border-slate-700 text-white font-bold text-lg active:bg-amber-500 active:text-slate-950"
+              className="w-14 h-16 rounded-xl bg-[#0d121c]/90 border border-slate-700 text-white font-bold text-lg active:bg-amber-500 active:text-slate-950"
             >
               ←
             </button>
@@ -469,25 +540,33 @@ export const RaceHud: React.FC<RaceHudProps> = ({
               onPointerDown={() => onTouchChange('right', true)}
               onPointerUp={() => onTouchChange('right', false)}
               onPointerLeave={() => onTouchChange('right', false)}
-              className="w-13 h-14 rounded-xl bg-[#0d121c]/90 border border-slate-700 text-white font-bold text-lg active:bg-amber-500 active:text-slate-950"
+              className="w-14 h-16 rounded-xl bg-[#0d121c]/90 border border-slate-700 text-white font-bold text-lg active:bg-amber-500 active:text-slate-950"
             >
               →
             </button>
           </div>
-          <div className="flex gap-1.5">
+          <div className="grid grid-cols-3 gap-1.5 w-[54%] max-w-[210px]">
             <button
               onPointerDown={() => onTouchChange('clutchKick', true)}
               onPointerUp={() => onTouchChange('clutchKick', false)}
               onPointerLeave={() => onTouchChange('clutchKick', false)}
-              className="px-2.5 h-14 rounded-xl bg-cyan-500/90 text-slate-950 font-bold text-[11px]"
+              className="w-full h-11 rounded-xl bg-cyan-500/90 text-slate-950 font-bold text-[11px] active:brightness-125"
             >
               KICK
+            </button>
+            <button
+              onPointerDown={() => onTouchChange('boost', true)}
+              onPointerUp={() => onTouchChange('boost', false)}
+              onPointerLeave={() => onTouchChange('boost', false)}
+              className="w-full h-11 rounded-xl bg-fuchsia-500/90 text-slate-950 font-bold text-[11px] active:brightness-125"
+            >
+              NITRO
             </button>
             <button
               onPointerDown={() => onTouchChange('handbrake', true)}
               onPointerUp={() => onTouchChange('handbrake', false)}
               onPointerLeave={() => onTouchChange('handbrake', false)}
-              className="px-2.5 h-14 rounded-xl bg-amber-500/90 text-slate-950 font-bold text-[11px]"
+              className="w-full h-11 rounded-xl bg-amber-500/90 text-slate-950 font-bold text-[11px] active:brightness-125"
             >
               E-BRK
             </button>
@@ -495,7 +574,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
               onPointerDown={() => onTouchChange('brake', true)}
               onPointerUp={() => onTouchChange('brake', false)}
               onPointerLeave={() => onTouchChange('brake', false)}
-              className="w-13 h-14 rounded-xl bg-rose-500/85 text-white font-bold text-xs"
+              className="w-full h-14 rounded-xl bg-rose-500/85 text-white font-bold text-xs active:brightness-125"
             >
               REM
             </button>
@@ -503,7 +582,7 @@ export const RaceHud: React.FC<RaceHudProps> = ({
               onPointerDown={() => onTouchChange('throttle', true)}
               onPointerUp={() => onTouchChange('throttle', false)}
               onPointerLeave={() => onTouchChange('throttle', false)}
-              className="w-15 h-14 rounded-xl bg-emerald-500/90 text-slate-950 font-bold text-xs"
+              className="col-span-2 w-full h-14 rounded-xl bg-emerald-500/90 text-slate-950 font-bold text-sm active:brightness-125"
             >
               GAS
             </button>
