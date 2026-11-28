@@ -492,12 +492,17 @@ export class DriftPhysicsCar {
 
     // --- 2. ENGINE ACCELERATION, REAR BURNOUT TRACTION LOSS & DRIFT SPEED CONTROL ---
     const maxSpeedMs = stats.maxSpeedKmh / 3.6;
+    // Laju jalan lurus (grip) dibuat lebih lembut: stock ~60 km/h, swap mesin penuh ~125 km/h.
+    // gripTopMs = kecepatan puncak alami saat tidak drift (tanpa nitro), dipakai juga untuk RPM & gigi.
+    const straightAccel = 9 + stats.powerFactor * 6.5;
+    const gripTopMs = straightAccel / (0.48 + (straightAccel * 0.82) / maxSpeedMs);
+    const gripTopKmh = gripTopMs * 3.6;
     const boostMult = this.isBoosting ? 1.38 * stats.boostPower : 1.0;
     // Pengaruh gigi pada akselerasi (hanya mode MANUAL): gigi rendah = tarikan kuat, gigi tinggi = lemah,
     // gigi terlalu tinggi untuk kecepatan = lugging, gigi terlalu rendah = kena limiter.
     let gearAccelScale = 1.0;
     if (this.transmissionMode === 'MANUAL') {
-      const speedNormNow = THREE.MathUtils.clamp(Math.max(0, forwardVel) / maxSpeedMs, 0, 1.2);
+      const speedNormNow = THREE.MathUtils.clamp(Math.max(0, forwardVel) / gripTopMs, 0, 1.2);
       const gearPos = speedNormNow * 5 - (this.manualGear - 1);
       const baseScale = [1.35, 1.15, 1.0, 0.85, 0.72][this.manualGear - 1] ?? 1.0;
       const lugPenalty = gearPos < 0 ? Math.max(0.45, 1 + gearPos * 0.55) : 1.0;
@@ -507,7 +512,13 @@ export class DriftPhysicsCar {
       // AUTO: tenaga terputus sebentar saat ganti gigi
       gearAccelScale = 0.35;
     }
-    const driveAccel = (19 + stats.powerFactor * 13.0) * boostMult * gearAccelScale * surfAccel;
+    // Tarikan saat grip lebih lembut; saat ban belakang lepas (drift) kembali ke nilai asli agar karakter drift tidak berubah
+    const driftAccel = 19 + stats.powerFactor * 13.0;
+    const driveAccel =
+      THREE.MathUtils.lerp(straightAccel, driftAccel, THREE.MathUtils.clamp(slideLoose * 1.6, 0, 1)) *
+      boostMult *
+      gearAccelScale *
+      surfAccel;
 
     if (!inSpinOut && input.throttle > 0) {
       const speedRatio = Math.max(0, forwardVel / (maxSpeedMs * boostMult));
@@ -903,7 +914,7 @@ export class DriftPhysicsCar {
     this.wheelSpinRad = this.rearWheelSpinRad;
 
     this.maxRpm = 7200 + build.engineTier * 700;
-    const speedNorm = Math.min(1, this.speedKmh / stats.maxSpeedKmh);
+    const speedNorm = Math.min(1, this.speedKmh / (gripTopKmh * 1.05));
     // Transmisi: T ganti mode, X naik gigi, Z turun gigi (satu tekanan = satu gigi)
     if (input.toggleTransmission && !this.prevToggleTransmission) {
       this.transmissionMode = this.transmissionMode === 'AUTO' ? 'MANUAL' : 'AUTO';
@@ -927,8 +938,8 @@ export class DriftPhysicsCar {
     } else {
       // AUTO berbasis RPM + gas: naik gigi saat RPM mendekati limiter, turun gigi saat gas dilepas / RPM jatuh.
       // Ada jeda ganti gigi (tenaga terputus sebentar) dan cooldown agar tidak bolak-balik.
-      const autoTopKmh = Math.min(stats.maxSpeedKmh, 150);
-      const gearSpanKmh = Math.max(20, autoTopKmh / 5);
+      const autoTopKmh = Math.max(40, gripTopKmh * 1.05);
+      const gearSpanKmh = Math.max(12, autoTopKmh / 5);
       const ratioIn = (g: number) =>
         THREE.MathUtils.clamp(this.speedKmh / (gearSpanKmh * g * 1.1), 0, 1.4);
 

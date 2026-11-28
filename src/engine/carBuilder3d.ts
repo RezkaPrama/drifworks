@@ -2183,6 +2183,204 @@ function wrapMeshIntoGroup(target: THREE.Object3D, groupName: string): THREE.Gro
   return wrapper;
 }
 
+interface GltfWheelRig {
+  fl: THREE.Group;
+  fr: THREE.Group;
+  rl: THREE.Group;
+  rr: THREE.Group;
+  steerFL: THREE.Group;
+  steerFR: THREE.Group;
+}
+
+interface GltfWheelConfig {
+  split: boolean; // true: satu mesh berisi 4 roda (dipisah per kuadran)
+  tire: RegExp; // nama node (atau induknya) untuk ban
+  parts: RegExp; // nama node untuk semua bagian roda yang ikut berputar (ban, velg, hub, cakram)
+}
+
+const GLTF_WHEEL_CONFIG: Partial<Record<CarId, GltfWheelConfig>> = {
+  bmw_e36: { split: true, tire: /tire/i, parts: /tire|rims|disk/i },
+  kijang_kapsul: { split: false, tire: /^TireRing/i, parts: /^(TireRing|Wheel0041|Hublf1|wheel)/i },
+  carry_futura: {
+    split: false,
+    tire: /^Cylinder(021|004|001|024)_low_/,
+    parts: /^Cylinder(021|004|001|024|022|007|002|025|003|023|026|027)_low_/,
+  },
+};
+
+/**
+ * Memisahkan roda dari model GLB menjadi hierarki steerGroup -> (flip kiri) -> wheel, dengan pivot di pusat ban.
+ * Roda kiri diberi flip 180 derajat (sama seperti mobil prosedural) agar rotation.x = -spin berputar maju.
+ * Mengembalikan null (tanpa mengubah model) jika roda tidak ditemukan atau sumbunya bukan sumbu X.
+ */
+function buildGltfWheelRig(
+  carId: CarId,
+  modelRoot: THREE.Object3D,
+  bodyGroup: THREE.Group,
+  disposables: { dispose: () => void }[],
+): GltfWheelRig | null {
+  const cfg = GLTF_WHEEL_CONFIG[carId];
+  if (!cfg) return null;
+  try {
+    const sources: { mesh: THREE.Mesh; isTire: boolean }[] = [];
+    modelRoot.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      const names: string[] = [];
+      for (let p: THREE.Object3D | null = o; p && p !== modelRoot; p = p.parent) names.push(p.name);
+      if (names.some((n) => cfg.parts.test(n))) {
+        sources.push({ mesh: o, isTire: names.some((n) => cfg.tire.test(n)) });
+      }
+    });
+    const tireSources = sources.filter((s) => s.isTire);
+    if (tireSources.length !== (cfg.split ? 1 : 4)) return null;
+
+    // Geometri dipanggang ke ruang bodyGroup (sudah termasuk skala & rotasi model)
+    const bake = (m: THREE.Mesh) => {
+      const g = m.geometry.clone();
+      g.applyMatrix4(m.matrixWorld);
+      return g;
+    };
+    const comp = (a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, i: number, c: number) =>
+      c === 0 ? a.getX(i) : c === 1 ? a.getY(i) : c === 2 ? a.getZ(i) : a.getW(i);
+    const partition = (geo: THREE.BufferGeometry, cx: number, cz: number): (THREE.BufferGeometry | null)[] => {
+      const ng = geo.index ? geo.toNonIndexed() : geo;
+      const pos = ng.getAttribute('position');
+      const buckets: number[][] = [[], [], [], []];
+      const triCount = Math.floor(pos.count / 3);
+      for (let t = 0; t < triCount; t++) {
+        const xc = (pos.getX(3 * t) + pos.getX(3 * t + 1) + pos.getX(3 * t + 2)) / 3;
+        const zc = (pos.getZ(3 * t) + pos.getZ(3 * t + 1) + pos.getZ(3 * t + 2)) / 3;
+        buckets[(zc > cz ? 0 : 2) + (xc < cx ? 0 : 1)].push(t);
+      }
+      return buckets.map((tris) => {
+        if (!tris.length) return null;
+        const out = new THREE.BufferGeometry();
+        for (const name of Object.keys(ng.attributes)) {
+          const a = ng.getAttribute(name);
+          const arr = new Float32Array(tris.length * 3 * a.itemSize);
+          let k = 0;
+          for (const t of tris) {
+            for (let v = 0; v < 3; v++) {
+              for (let c = 0; c < a.itemSize; c++) arr[k++] = comp(a, 3 * t + v, c);
+            }
+          }
+          out.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize));
+        }
+        return out;
+      });
+    };
+    // corner: 0 = depan kiri, 1 = depan kanan, 2 = belakang kiri, 3 = belakang kanan (depan = +Z, kiri = -X)
+    const cornerOf = (x: number, z: number, cx: number, cz: number) => (z > cz ? 0 : 2) + (x < cx ? 0 : 1);
+
+    type Piece = { geo: THREE.BufferGeometry; mat: THREE.Mesh['material']; isTire: boolean; corner: number };
+    const pieces: Piece[] = [];
+
+    if (cfg.split) {
+      const tireGeo = bake(tireSources[0].mesh);
+      tireGeo.computeBoundingBox();
+      const c0 = tireGeo.boundingBox!.getCenter(new THREE.Vector3());
+      for (const s of sources) {
+        const geo = s === tireSources[0] ? tireGeo : bake(s.mesh);
+        partition(geo, c0.x, c0.z).forEach((g, corner) => {
+          if (g) pieces.push({ geo: g, mat: s.mesh.material, isTire: s.isTire, corner });
+        });
+      }
+    } else {
+      const baked = sources.map((s) => {
+        const g = bake(s.mesh);
+        g.computeBoundingBox();
+        return { s, g, c: g.boundingBox!.getCenter(new THREE.Vector3()) };
+      });
+      const tires = baked.filter((b) => b.s.isTire);
+      const mx = tires.reduce((a, t) => a + t.c.x, 0) / tires.length;
+      const mz = tires.reduce((a, t) => a + t.c.z, 0) / tires.length;
+      const tireCorner = tires.map((t) => cornerOf(t.c.x, t.c.z, mx, mz));
+      if (new Set(tireCorner).size !== 4) return null;
+      for (const b of baked) {
+        let corner: number;
+        if (b.s.isTire) {
+          corner = tireCorner[tires.indexOf(b)];
+        } else {
+          let best = 0;
+          let bd = Infinity;
+          tires.forEach((t, i) => {
+            const d = t.c.distanceToSquared(b.c);
+            if (d < bd) {
+              bd = d;
+              best = i;
+            }
+          });
+          corner = tireCorner[best];
+        }
+        pieces.push({ geo: b.g, mat: b.s.mesh.material, isTire: b.s.isTire, corner });
+      }
+    }
+
+    const wheelNames = ['frontLeftWheel', 'frontRightWheel', 'rearLeftWheel', 'rearRightWheel'];
+    const steerNames = ['frontLeftSteerGroup', 'frontRightSteerGroup', 'rearLeftMount', 'rearRightMount'];
+    const wheels: THREE.Group[] = [];
+    const steers: THREE.Group[] = [];
+    const newGeos: THREE.BufferGeometry[] = [];
+
+    for (let c = 0; c < 4; c++) {
+      const mine = pieces.filter((p) => p.corner === c);
+      const box = new THREE.Box3();
+      for (const p of mine) {
+        if (!p.isTire) continue;
+        p.geo.computeBoundingBox();
+        box.union(p.geo.boundingBox!);
+      }
+      if (box.isEmpty()) return null;
+      const size = box.getSize(new THREE.Vector3());
+      // Sumbu roda harus sejajar sumbu X game (ban pipih di X), kalau tidak jangan diubah
+      if (size.x > Math.min(size.y, size.z) * 0.9) return null;
+      const pivot = box.getCenter(new THREE.Vector3());
+      const left = c % 2 === 0;
+
+      const steer = new THREE.Group();
+      steer.name = steerNames[c];
+      steer.position.copy(pivot);
+      const wheel = new THREE.Group();
+      wheel.name = wheelNames[c];
+      for (const p of mine) {
+        p.geo.translate(-pivot.x, -pivot.y, -pivot.z);
+        if (left) p.geo.rotateY(Math.PI);
+        const mesh = new THREE.Mesh(p.geo, p.mat);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        wheel.add(mesh);
+        newGeos.push(p.geo);
+      }
+      if (left) {
+        const flip = new THREE.Group();
+        flip.rotation.y = Math.PI;
+        flip.add(wheel);
+        steer.add(flip);
+      } else {
+        steer.add(wheel);
+      }
+      wheels.push(wheel);
+      steers.push(steer);
+    }
+
+    // Semua pengecekan lolos: baru ubah scene
+    sources.forEach((s) => s.mesh.removeFromParent());
+    steers.forEach((s) => bodyGroup.add(s));
+    newGeos.forEach((g) => disposables.push(g));
+    return {
+      fl: wheels[0],
+      fr: wheels[1],
+      rl: wheels[2],
+      rr: wheels[3],
+      steerFL: steers[0],
+      steerFR: steers[1],
+    };
+  } catch (err) {
+    console.warn(`[carBuilder3d] wheel split failed for ${carId}:`, err);
+    return null;
+  }
+}
+
 /**
  * Loads an external .glb / .gltf car model when configured (via CarCatalogItem.modelUrl
  * or options.modelUrl) and maps bodyGroup + wheel steering/spin hierarchy,
@@ -2279,13 +2477,17 @@ export async function loadCarRigWithFallback(
     const rlObj = findNode(['rearLeftWheel', 'wheel_rl', 'Wheel_RL', 'RL_Wheel']);
     const rrObj = findNode(['rearRightWheel', 'wheel_rr', 'Wheel_RR', 'RR_Wheel']);
 
-    const frontLeftWheel = flObj ? wrapMeshIntoGroup(flObj, 'frontLeftWheel') : new THREE.Group();
-    const frontRightWheel = frObj ? wrapMeshIntoGroup(frObj, 'frontRightWheel') : new THREE.Group();
-    const rearLeftWheel = rlObj ? wrapMeshIntoGroup(rlObj, 'rearLeftWheel') : new THREE.Group();
-    const rearRightWheel = rrObj ? wrapMeshIntoGroup(rrObj, 'rearRightWheel') : new THREE.Group();
+    // Roda GLB dirakit ulang (setir -> putar) agar bisa berputar; null = model tanpa roda terpisah / tidak dikenali
+    bodyGroup.updateMatrixWorld(true);
+    const splitRig = buildGltfWheelRig(carId, modelRoot, bodyGroup, disposables);
 
-    const frontLeftSteerGroup = wrapMeshIntoGroup(frontLeftWheel, 'frontLeftSteerGroup');
-    const frontRightSteerGroup = wrapMeshIntoGroup(frontRightWheel, 'frontRightSteerGroup');
+    const frontLeftWheel = splitRig ? splitRig.fl : flObj ? wrapMeshIntoGroup(flObj, 'frontLeftWheel') : new THREE.Group();
+    const frontRightWheel = splitRig ? splitRig.fr : frObj ? wrapMeshIntoGroup(frObj, 'frontRightWheel') : new THREE.Group();
+    const rearLeftWheel = splitRig ? splitRig.rl : rlObj ? wrapMeshIntoGroup(rlObj, 'rearLeftWheel') : new THREE.Group();
+    const rearRightWheel = splitRig ? splitRig.rr : rrObj ? wrapMeshIntoGroup(rrObj, 'rearRightWheel') : new THREE.Group();
+
+    const frontLeftSteerGroup = splitRig ? splitRig.steerFL : wrapMeshIntoGroup(frontLeftWheel, 'frontLeftSteerGroup');
+    const frontRightSteerGroup = splitRig ? splitRig.steerFR : wrapMeshIntoGroup(frontRightWheel, 'frontRightSteerGroup');
 
     const rearStanceX = spec.width * 0.5;
     return {
