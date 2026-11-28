@@ -116,6 +116,48 @@ function getThemePalette(theme: TrackDefinition['propTheme']): ThemePalette {
         dustColor: 0x7dd3fc,
         moteColor: 0x38bdf8,
       };
+    case 'forest':
+      // Hutan pinus, jalan tanah kering berdebu
+      return {
+        skyZenith: 0x4a90d0,
+        skyHorizon: 0xdcebd6,
+        roadMode: 'dirt',
+        roadBase: '#a8845a',
+        roadRut: '#7d5e3c',
+        roadEdge: '#8c6a45',
+        cliffColor: 0x7a6a55,
+        hillColor: 0x4f6b32,
+        distantHillColor: 0x6f8a62,
+        bushColor: 0x4d6b2a,
+        pineColor: 0x2f5a2a,
+        oakColor: 0x6b7f2e,
+        trunkColor: 0x5a3b24,
+        fenceWoodColor: 0x6b4a2e,
+        pebbleColor: 0x9c8466,
+        dustColor: 0xd9c19a,
+        moteColor: 0xf5e6b8,
+      };
+    case 'mudvalley':
+      // Lembah hujan, lumpur gelap & berkabut
+      return {
+        skyZenith: 0x56606c,
+        skyHorizon: 0x9aa4ae,
+        roadMode: 'dirt',
+        roadBase: '#4a3a29',
+        roadRut: '#2b2016',
+        roadEdge: '#3a2d1f',
+        cliffColor: 0x5a5448,
+        hillColor: 0x4a5236,
+        distantHillColor: 0x707a74,
+        bushColor: 0x3d5230,
+        pineColor: 0x25402a,
+        oakColor: 0x55612c,
+        trunkColor: 0x3f2c1d,
+        fenceWoodColor: 0x4d3a28,
+        pebbleColor: 0x6b5f50,
+        dustColor: 0x8a7a64,
+        moteColor: 0xb8c4cc,
+      };
     case 'harbor':
     default:
       // Warm sunlit Pixar diorama with crisp dark-charcoal asphalt circuit
@@ -174,14 +216,51 @@ function createRallyRoadTexture(
     ctx.fillRect(x, y, 2, 2);
   }
 
-  // Crisp white sidelines & subtle dashed centerline
-  ctx.fillStyle = 'rgba(248,250,252,0.82)';
-  ctx.fillRect(16, 0, 10, 512);
-  ctx.fillRect(486, 0, 10, 512);
+  if (palette.roadMode === 'dirt') {
+    // Jalan tanah: bekas roda dalam, gundukan tengah, dan butiran kerikil (tanpa marka aspal)
+    [150, 362].forEach((cx) => {
+      const rut = ctx.createLinearGradient(cx - 30, 0, cx + 30, 0);
+      rut.addColorStop(0, 'rgba(0,0,0,0)');
+      rut.addColorStop(0.5, palette.roadRut);
+      rut.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = rut;
+      ctx.fillRect(cx - 30, 0, 60, 512);
+    });
+    ctx.globalAlpha = 1.0;
+    // Gundukan tengah lebih terang (kerikil/rumput tipis)
+    const mid = ctx.createLinearGradient(226, 0, 286, 0);
+    mid.addColorStop(0, 'rgba(255,255,255,0)');
+    mid.addColorStop(0.5, 'rgba(255,255,255,0.10)');
+    mid.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = mid;
+    ctx.fillRect(226, 0, 60, 512);
+    // Butiran kerikil & bercak tanah
+    for (let i = 0; i < 1400; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      const r = 1 + Math.random() * 3;
+      ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,240,210,0.14)' : 'rgba(30,20,10,0.22)';
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Tepi jalan menyatu dengan tanah sekitar
+    ctx.fillStyle = palette.roadEdge;
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(0, 0, 22, 512);
+    ctx.fillRect(490, 0, 22, 512);
+    ctx.globalAlpha = 1.0;
+  } else {
+    // Crisp white sidelines & subtle dashed centerline
+    ctx.fillStyle = 'rgba(248,250,252,0.82)';
+    ctx.fillRect(16, 0, 10, 512);
+    ctx.fillRect(486, 0, 10, 512);
 
-  ctx.fillStyle = 'rgba(251,191,36,0.45)';
-  for (let y = 16; y < 512; y += 64) {
-    ctx.fillRect(252, y, 8, 34);
+    ctx.fillStyle = 'rgba(251,191,36,0.45)';
+    for (let y = 16; y < 512; y += 64) {
+      ctx.fillRect(252, y, 8, 34);
+    }
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -588,10 +667,17 @@ export function buildTrackWorld(
 
   // Helper: check minimum squared distance from any point to track centerline
   const isClearOfRoad = (x: number, z: number, minClearance: number): boolean => {
+    // Jarak ke setiap segmen jalur (bukan hanya titik sampel) agar track panjang tidak lolos
     const cSq = minClearance * minClearance;
-    for (let j = 0; j < sampleCount; j += 4) {
-      const dx = x - samples[j].point.x;
-      const dz = z - samples[j].point.z;
+    for (let j = 0; j < sampleCount; j++) {
+      const a = samples[j].point;
+      const b = samples[(j + 1) % sampleCount].point;
+      const abx = b.x - a.x;
+      const abz = b.z - a.z;
+      const lenSq = abx * abx + abz * abz || 1;
+      const tt = Math.max(0, Math.min(1, ((x - a.x) * abx + (z - a.z) * abz) / lenSq));
+      const dx = x - (a.x + abx * tt);
+      const dz = z - (a.z + abz * tt);
       if (dx * dx + dz * dz < cSq) return false;
     }
     return true;
@@ -706,8 +792,10 @@ export function buildTrackWorld(
   const roadMat = register(
     new THREE.MeshStandardMaterial({
       map: roadTex,
-      roughness: 0.46,
-      metalness: 0.12,
+      roughness:
+        palette.roadMode === 'dirt' ? (track.surface === 'mud_wet' ? 0.62 : 0.95) : 0.46,
+      metalness:
+        palette.roadMode === 'dirt' ? (track.surface === 'mud_wet' ? 0.1 : 0.0) : 0.12,
       side: THREE.DoubleSide,
       polygonOffset: true,
       polygonOffsetFactor: -1,
@@ -1138,10 +1226,13 @@ export function buildTrackWorld(
   const mountainInst = new THREE.InstancedMesh(mountainGeo, mountainMat, mountainCount);
   for (let m = 0; m < mountainCount; m++) {
     const ang = (m / mountainCount) * Math.PI * 2;
-    const rad = 310 + (m % 3) * 55;
+    const sc = 0.9 + (m % 4) * 0.35;
+    // Radius cincin mengikuti ukuran track agar gunung tidak jatuh di atas jalur (track rally panjang)
+    const trackMaxR = samples.reduce((mx2, sp) => Math.max(mx2, Math.hypot(sp.point.x, sp.point.z)), 0);
+    const needR = trackMaxR + 68 * sc * 1.35 + 60 + (m % 3) * 35;
+    const rad = Math.max(310 + (m % 3) * 55, needR);
     const mx = Math.cos(ang) * rad;
     const mz = Math.sin(ang) * rad;
-    const sc = 0.9 + (m % 4) * 0.35;
     dummy.position.set(mx, 28 * sc, mz);
     dummy.rotation.set(0, m * 0.8, 0);
     dummy.scale.set(sc * 1.35, sc, sc * 1.2);

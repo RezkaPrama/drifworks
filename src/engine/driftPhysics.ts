@@ -44,6 +44,9 @@ export class DriftPhysicsCar {
   public nitro = 1.0;
   public isBoosting = false;
 
+  // Permukaan track: 'tarmac' = perilaku drift asli; 'dirt_dry' / 'mud_wet' = gaya berkendara rally
+  public surface: 'tarmac' | 'dirt_dry' | 'mud_wet' = 'tarmac';
+
   // Level-based controls: steer -5 (kanan penuh) .. 0 (lurus) .. +5 (kiri penuh), throttle/brake 0..5
   public steerLevel = 0;
   public throttleLevel = 0;
@@ -342,6 +345,15 @@ export class DriftPhysicsCar {
     // Mechanical & Tire Wear Multipliers
     const tireGripFactor = 0.72 + 0.28 * (this.tireHealth / 100);
     const stockGripPenalty = stats.driftReadiness < 42 ? 0.68 : 1.0;
+
+    // Parameter permukaan: rally = grip-driving, drift hanya dipicu handbrake / clutch kick
+    const isRally = this.surface !== 'tarmac';
+    const isMud = this.surface === 'mud_wet';
+    const surfGrip = isMud ? 0.55 : isRally ? 0.8 : 1.0; // pengali peluruhan gaya samping (kecil = lebih licin)
+    const surfAccel = isMud ? 0.82 : isRally ? 0.95 : 1.0;
+    const surfDrag = isMud ? 0.24 : isRally ? 0.1 : 0;
+    const rallyInitScale = isMud ? 0.6 : isRally ? 0.45 : 1.0;
+    const rallyRecover = isMud ? 0.5 : isRally ? 0.95 : 0;
     const wheelspinPower =
       (stats.powerFactor * 0.55 +
         build.engineTier * 0.26 +
@@ -411,6 +423,9 @@ export class DriftPhysicsCar {
       }
     }
 
+    // Rally: steer cepat / gas tidak mudah melepas ban belakang, kecuali handbrake
+    if (isRally && !input.handbrake) initiationImpulse *= rallyInitScale;
+
     if (inSpinOut) {
       this.rearTraction = 0.04;
     } else if (initiationImpulse > 0) {
@@ -451,6 +466,11 @@ export class DriftPhysicsCar {
       this.rearTraction = Math.min(1.0, this.rearTraction + 1.35 * clampedDt);
     }
 
+    // Rally: ban belakang cepat menggigit lagi (lumpur lebih lambat), jadi mobil tidak terus drift
+    if (isRally && !inSpinOut && !input.handbrake) {
+      this.rearTraction = Math.min(1.0, this.rearTraction + rallyRecover * clampedDt);
+    }
+
     const slideLoose = 1.0 - this.rearTraction;
 
     if (slideLoose > 0.38 && currentSpeedKmh > 25) {
@@ -487,7 +507,7 @@ export class DriftPhysicsCar {
       // AUTO: tenaga terputus sebentar saat ganti gigi
       gearAccelScale = 0.35;
     }
-    const driveAccel = (19 + stats.powerFactor * 13.0) * boostMult * gearAccelScale;
+    const driveAccel = (19 + stats.powerFactor * 13.0) * boostMult * gearAccelScale * surfAccel;
 
     if (!inSpinOut && input.throttle > 0) {
       const speedRatio = Math.max(0, forwardVel / (maxSpeedMs * boostMult));
@@ -534,7 +554,7 @@ export class DriftPhysicsCar {
     // Sideways scrub drag increases naturally with slip angle & rear burnout so drift speed stays controllable
     const driftScrubDrag =
       slideLoose > 0.3 ? 0.4 + absSlipRad * 0.3 + slideLoose * 0.16 : 0.48;
-    forwardVel *= Math.exp(-(inSpinOut ? 1.7 : driftScrubDrag) * clampedDt);
+    forwardVel *= Math.exp(-((inSpinOut ? 1.7 : driftScrubDrag) + surfDrag) * clampedDt);
 
     // --- 3. PROGRESSIVE TRANSITION LEVELS, COUNTER-STEER & OVER-ROTATION SPIN-OUT ---
     const sens = THREE.MathUtils.clamp(build.steerSensitivity ?? 0.7, 0.4, 1.0);
@@ -765,7 +785,7 @@ export class DriftPhysicsCar {
     }
 
     // --- 4. LATERAL SLIDE & BOUNDARY / WALL HIT DAMAGE ---
-    const gripDecay = stats.lateralGrip * 4.95 * tireGripFactor;
+    const gripDecay = stats.lateralGrip * 4.95 * tireGripFactor * surfGrip;
     const transitionCarryScale =
       this.transitionBridgeTimer > 0 || (isCounterSteerInput && this.transitionHold > 0.2)
         ? 0.76

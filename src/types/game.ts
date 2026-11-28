@@ -37,7 +37,9 @@ export type TrackId =
   | 'sunset_canyon'
   | 'sakura_touge'
   | 'neon_docks'
-  | 'practice_yard';
+  | 'practice_yard'
+  | 'rally_pine_dry'
+  | 'rally_valley_mud';
 
 export type PaintFinish = 'gloss' | 'metallic' | 'matte';
 export type RimStyle = 'steel' | 'spoke5' | 'mesh' | 'turbofan';
@@ -139,11 +141,13 @@ export interface TrackDefinition {
   fogColor: string;
   groundColor: string;
   curbAccent: string;
-  propTheme: 'harbor' | 'canyon' | 'sakura' | 'neon';
+  propTheme: 'harbor' | 'canyon' | 'sakura' | 'neon' | 'forest' | 'mudvalley';
   waypoints: [number, number][];
   clipZones: number[];
   layout?: 'circuit' | 'arena'; // default 'circuit' (spline); 'arena' = lapangan latihan donut & figure-8
   arenaRadius?: number; // radius lapangan aspal (meter) khusus layout 'arena'
+  mode?: 'drift' | 'rally'; // default 'drift'
+  surface?: 'tarmac' | 'dirt_dry' | 'mud_wet'; // default 'tarmac'; dipakai visual & fisika rally
 }
 
 export interface UserProfile {

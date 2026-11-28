@@ -735,10 +735,20 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
           scene.add(trackWorld.group);
 
           scene.background = new THREE.Color(trackDef.skyColor);
-          scene.fog = new THREE.FogExp2(trackDef.fogColor, trackDef.propTheme === 'neon' ? 0.0014 : 0.00105);
+          scene.fog = new THREE.FogExp2(
+            trackDef.fogColor,
+            trackDef.propTheme === 'mudvalley'
+              ? 0.0042
+              : trackDef.propTheme === 'forest'
+                ? 0.0016
+                : trackDef.propTheme === 'neon'
+                  ? 0.0014
+                  : 0.00105,
+          );
           hemiLight.color.set(trackDef.propTheme === 'neon' ? 0x60a5fa : 0xe0f2fe);
           hemiLight.groundColor.set(trackDef.groundColor);
-          hemiLight.intensity = trackDef.propTheme === 'neon' ? 0.8 : 0.88;
+          hemiLight.intensity =
+            trackDef.propTheme === 'mudvalley' ? 0.62 : trackDef.propTheme === 'neon' ? 0.8 : 0.88;
           keyLight.color.set(
             trackDef.propTheme === 'canyon'
               ? 0xffcf99
@@ -748,11 +758,13 @@ export const ThreeViewport: React.FC<ThreeViewportProps> = ({
                   ? 0x93c5fd
                   : 0xfff3d4,
           );
-          keyLight.intensity = trackDef.propTheme === 'neon' ? 1.5 : 1.95;
+          keyLight.intensity =
+            trackDef.propTheme === 'mudvalley' ? 1.0 : trackDef.propTheme === 'neon' ? 1.5 : 1.95;
 
           pebbleMat.color.setHex(0x64748b);
           smokeMat.color.set(current.build.smokeColorHex);
 
+          physics.surface = trackDef.surface ?? 'tarmac';
           physics.bankedScore = 0;
           physics.zoneHits = 0;
           physics.maxCombo = 1.0;
